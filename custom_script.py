@@ -171,9 +171,9 @@ def get_patch_status(ami_age_str):
     return 0
 
 def write_node_row(writer, account_id, region, cluster, cluster_version, node, latest_ami, patch_status, node_readiness):
-    # Ensure patch_status is always 0 or 1, node_readiness is 0 or 1 (Ready=1, NotReady=0)
     patch_status = 1 if patch_status == 1 else 0
-    readiness_val = 1 if node_readiness == "Ready" else 0
+    # Print actual readiness status if available, else 0
+    readiness_val = node_readiness if node_readiness in ("Ready", "NotReady") else 0
     writer.writerow([
         account_id,
         region,
