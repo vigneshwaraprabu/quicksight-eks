@@ -1,7 +1,3 @@
-
-
-
-
 import csv, boto3, argparse
 from botocore.exceptions import ClientError
 from datetime import datetime, timezone
