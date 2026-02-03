@@ -84,11 +84,8 @@ def parse_ami_info(ami_info):
 
 def get_node_readiness(instance_ids):
     try:
-        # Try to select the context matching the cluster name
         kubeconfig_env = os.environ.get("KUBECONFIG", "~/.kube/config")
         kubeconfig_paths = kubeconfig_env.split(":") if ":" in kubeconfig_env else [kubeconfig_env]
-        # Try all kubeconfigs, select the context that matches the cluster name
-        # The cluster name will be passed as a global variable (set in get_node_details)
         cluster_name = globals().get("__CURRENT_CLUSTER_NAME__")
         for kubeconfig_path in kubeconfig_paths:
             kubeconfig_path = os.path.expanduser(kubeconfig_path)
@@ -98,6 +95,9 @@ def get_node_readiness(instance_ids):
                     if cluster_name and (cluster_name in ctx["name"]):
                         print(f"[DEBUG] Loading kubeconfig {kubeconfig_path} with context {ctx['name']} for cluster {cluster_name}")
                         kubernetes.config.load_kube_config(config_file=kubeconfig_path, context=ctx["name"])
+                        # Print the current context before checking node readiness
+                        current_context = kubernetes.config.list_kube_config_contexts(config_file=kubeconfig_path)[1]
+                        print(f"[INFO] Current kubeconfig context: {current_context['name'] if current_context else None}")
                         v1 = k8s.CoreV1Api()
                         k8s_nodes = v1.list_node()
                         readiness_map = {}
