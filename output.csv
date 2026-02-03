@@ -1,4 +1,4 @@
-AccountID,Region,ClusterName,ClusterVersion,InstanceID,AMI_ID,AMI_Age,OS_Version,InstanceType,NodeState,NodeUptime,Latest_EKS_AMI,PatchStatus
-853973692277,us-east-1,poc-cluster1,1.34,i-04b0234596370de06,ami-039c445452bab1f53,12 days,Amazon Linux 2023,t3.medium,running,0 days 13 hours,ami-0297916cef61076f8,True
-853973692277,us-east-1,poc-cluster1,1.34,i-00c61b0c86fe8f8f1,ami-039c445452bab1f53,12 days,Amazon Linux 2023,t3.medium,running,0 days 13 hours,ami-0297916cef61076f8,True
-853973692277,us-east-1,pradeep-modmed-cluster,1.34,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A
+AccountID,Region,ClusterName,ClusterVersion,InstanceID,AMI_ID,AMI_Age,OS_Version,InstanceType,NodeState,NodeUptime,Latest_EKS_AMI,PatchStatus,NodeReadinessStatus
+853973692277,us-east-1,poc-cluster1,1.34,i-04b0234596370de06,ami-039c445452bab1f53,13 days,Amazon Linux 2023,t3.medium,running,1 days 13 hours,ami-0297916cef61076f8,1,Ready
+853973692277,us-east-1,poc-cluster1,1.34,i-00c61b0c86fe8f8f1,ami-039c445452bab1f53,13 days,Amazon Linux 2023,t3.medium,running,1 days 13 hours,ami-0297916cef61076f8,1,Ready
+853973692277,us-east-1,pradeep-modmed-cluster,1.34,0,0,0,0,0,0,0,0,0,0
