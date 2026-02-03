@@ -1,0 +1,3 @@
+AccountID,Region,ClusterName,InstanceID,AMI_ID,AMI_Age,NodeState,NodeUptime,PatchStatus
+8.53974E+11,us-east-1,poc-cluster1,i-04b0234596370de06,ami-039c445452bab1f53,10 days,running,2 days,TRUE
+8.53974E+11,us-east-1,poc-cluster1,i-00c61b0c86fe8f8f1,ami-039c445452bab1f53,10 days,running,2 days,TRUE
