@@ -33,15 +33,18 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Generate kubeconfig for all EKS clusters
+      - name: Generate kubeconfig for each EKS cluster and run script
         run: |
           #!/bin/bash
           set -e
-          # List all clusters from your account/region
           clusters=$(aws eks list-clusters --region ${{ secrets.AWS_REGION }} --output text --query 'clusters[]')
           for cluster in $clusters; do
             echo "Generating kubeconfig for $cluster"
-            aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name "$cluster" --alias "$cluster"
+            export KUBECONFIG="/tmp/kubeconfig-$cluster"
+            aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name "$cluster" --kubeconfig "$KUBECONFIG"
+            echo "Running inventory script for $cluster with KUBECONFIG=$KUBECONFIG"
+            python custom_script.py --bucket "$EKS_INVENTORY_BUCKET" --account-list "accounts.csv" --prefix "$EKS_INVENTORY_PREFIX"
+            rm -f "$KUBECONFIG"
           done
 
       - name: Set environment variables for script
@@ -50,10 +53,11 @@ jobs:
           echo "EKS_INVENTORY_ACCOUNT_LIST=$EKS_INVENTORY_ACCOUNT_LIST" >> $GITHUB_ENV
           echo "EKS_INVENTORY_PREFIX=$EKS_INVENTORY_PREFIX" >> $GITHUB_ENV
 
-      - name: Run EKS Inventory Script
-        run: |
-          pwd; ls;
-          python custom_script.py --bucket "$EKS_INVENTORY_BUCKET" --account-list "accounts.csv" --prefix "$EKS_INVENTORY_PREFIX"
+      # The script is now run per-cluster above with the correct KUBECONFIG
+      # - name: Run EKS Inventory Script
+      #   run: |
+      #     pwd; ls;
+      #     python custom_script.py --bucket "$EKS_INVENTORY_BUCKET" --account-list "accounts.csv" --prefix "$EKS_INVENTORY_PREFIX"
 
       - name: Upload output.csv as artifact
         uses: actions/upload-artifact@v4
