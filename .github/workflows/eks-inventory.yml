@@ -43,6 +43,19 @@ jobs:
           role-to-assume: arn:aws:iam::853973692277:role/GithubActionsRole
           aws-region: us-east-1
 
+      - name: Verify Initial OIDC Identity
+        run: |
+          echo "=== Initial OIDC Identity (GithubActionsRole) ==="
+          aws sts get-caller-identity
+          echo ""
+          echo "⚠️  NOTE: The script will assume roles from accounts.csv for EKS access"
+          echo "⚠️  Make sure the role in accounts.csv (e.g., EC2RoleforMSK) has EKS access entries!"
+
+      - name: Display accounts.csv roles
+        run: |
+          echo "=== Roles that will be assumed from accounts.csv ==="
+          cat accounts.csv
+
       - name: Generate kubeconfig for all EKS clusters
         run: |
           python3 custom_script.py --bucket vignesh-s3-debezium-test --account-list "accounts.csv"

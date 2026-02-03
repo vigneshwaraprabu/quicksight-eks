@@ -10,11 +10,13 @@ import os
 
 def assume_role(account_id, role_name, region):
     sts = boto3.client("sts", region_name=region)
+    print(f"🔄 Attempting to assume role: arn:aws:iam::{account_id}:role/{role_name}")
     response = sts.assume_role(
         RoleArn=f"arn:aws:iam::{account_id}:role/{role_name}",
         RoleSessionName=f"AssumeRoleTest-{account_id}"
     )
     creds = response["Credentials"]
+    print(f"✅ Successfully assumed role: {role_name}")
     return boto3.Session(
         aws_access_key_id=creds["AccessKeyId"],
         aws_secret_access_key=creds["SecretAccessKey"],
@@ -115,6 +117,11 @@ def get_node_readiness(instance_ids, cluster_name, region, session):
             kubeconfig_path = tmp.name
 
         creds = session.get_credentials().get_frozen_credentials()
+        
+        # Debug: Print which role is accessing EKS
+        sts = session.client("sts", region_name=region)
+        identity = sts.get_caller_identity()
+        print(f"🔍 Accessing EKS cluster '{cluster_name}' with identity: {identity['Arn']}")
 
         env = os.environ.copy()
         env.update({
@@ -296,6 +303,7 @@ def main():
         current_identity = get_current_identity()
         current_account = current_identity["Account"]
         current_arn = current_identity["Arn"]
+        print(f"🔑 Initial OIDC Identity: {current_arn}")
     except Exception:
         current_account = None
         current_arn = ""
