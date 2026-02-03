@@ -111,36 +111,35 @@ def parse_ami_info(ami_info):
 
 def get_node_readiness(instance_ids, cluster_name, region, session):
     kubeconfig_path = None
+    
+    # Save and restore credentials in a context manager style
+    original_aws_env = {
+        'AWS_ACCESS_KEY_ID': os.environ.get('AWS_ACCESS_KEY_ID'),
+        'AWS_SECRET_ACCESS_KEY': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        'AWS_SESSION_TOKEN': os.environ.get('AWS_SESSION_TOKEN'),
+        'AWS_DEFAULT_REGION': os.environ.get('AWS_DEFAULT_REGION')
+    }
+    
     try:
-        # Create temp kubeconfig
-        with tempfile.NamedTemporaryFile(delete=False, mode='w') as tmp:
-            kubeconfig_path = tmp.name
-
         creds = session.get_credentials().get_frozen_credentials()
         
-        # Debug: Print which role is accessing EKS
+        # Debug
         sts = session.client("sts", region_name=region)
         identity = sts.get_caller_identity()
         print(f"🔍 Accessing EKS cluster '{cluster_name}' with identity: {identity['Arn']}")
 
-        # IMPORTANT: Set environment variables for subprocess AND current process
-        env = os.environ.copy()
-        env.update({
-            "AWS_ACCESS_KEY_ID": creds.access_key,
-            "AWS_SECRET_ACCESS_KEY": creds.secret_key,
-            "AWS_SESSION_TOKEN": creds.token,
-            "AWS_DEFAULT_REGION": region
-        })
+        # Temporarily set environment for this operation only
+        os.environ['AWS_ACCESS_KEY_ID'] = creds.access_key
+        os.environ['AWS_SECRET_ACCESS_KEY'] = creds.secret_key
+        os.environ['AWS_SESSION_TOKEN'] = creds.token
+        os.environ['AWS_DEFAULT_REGION'] = region
 
-        # Generate kubeconfig dynamically using the assumed role credentials
+        with tempfile.NamedTemporaryFile(delete=False, mode='w') as tmp:
+            kubeconfig_path = tmp.name
+
+        # Generate kubeconfig
         result = subprocess.run(
-            [
-                "aws", "eks", "update-kubeconfig",
-                "--name", cluster_name,
-                "--region", region,
-                "--kubeconfig", kubeconfig_path
-            ],
-            env=env,
+            ["aws", "eks", "update-kubeconfig", "--name", cluster_name, "--region", region, "--kubeconfig", kubeconfig_path],
             capture_output=True,
             text=True
         )
@@ -149,45 +148,25 @@ def get_node_readiness(instance_ids, cluster_name, region, session):
             print(f"❌ Failed to generate kubeconfig: {result.stderr}")
             return {iid: "Unknown" for iid in instance_ids}
 
-        # CRITICAL: Override the current process environment for kubernetes client
-        # The kubernetes client will use these credentials when making API calls
-        old_env = {}
-        for key in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION"]:
-            old_env[key] = os.environ.get(key)
-            if key in env:
-                os.environ[key] = env[key]
+        # Load and use kubeconfig
+        kubernetes.config.load_kube_config(config_file=kubeconfig_path)
+        v1 = k8s.CoreV1Api()
+        k8s_nodes = v1.list_node()
 
-        try:
-            # Load kubeconfig & query k8s with the correct credentials
-            kubernetes.config.load_kube_config(config_file=kubeconfig_path)
-            v1 = k8s.CoreV1Api()
-            k8s_nodes = v1.list_node()
+        readiness_map = {}
+        for node in k8s_nodes.items:
+            provider_id = node.spec.provider_id
+            if provider_id and provider_id.startswith("aws:///"):
+                instance_id = provider_id.split("/")[-1]
+                if instance_id in instance_ids:
+                    conditions = node.status.conditions or []
+                    ready = any(c.type == "Ready" and c.status == "True" for c in conditions)
+                    readiness_map[instance_id] = "Ready" if ready else "NotReady"
 
-            readiness_map = {}
-            for node in k8s_nodes.items:
-                provider_id = node.spec.provider_id
-                if provider_id and provider_id.startswith("aws:///"):
-                    instance_id = provider_id.split("/")[-1]
-                    if instance_id in instance_ids:
-                        conditions = node.status.conditions or []
-                        ready = any(
-                            c.type == "Ready" and c.status == "True"
-                            for c in conditions
-                        )
-                        readiness_map[instance_id] = "Ready" if ready else "NotReady"
+        for iid in instance_ids:
+            readiness_map.setdefault(iid, "Unknown")
 
-            for iid in instance_ids:
-                readiness_map.setdefault(iid, "Unknown")
-
-            return readiness_map
-
-        finally:
-            # Restore original environment variables
-            for key, value in old_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
+        return readiness_map
 
     except Exception as e:
         print(f"❌ Failed to fetch node readiness for cluster {cluster_name}: {e}")
@@ -196,11 +175,19 @@ def get_node_readiness(instance_ids, cluster_name, region, session):
         return {iid: "Unknown" for iid in instance_ids}
 
     finally:
+        # Always restore original environment
+        for key, value in original_aws_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        
         if kubeconfig_path and os.path.exists(kubeconfig_path):
             try:
                 os.remove(kubeconfig_path)
             except Exception:
                 pass
+
 
 def get_node_details(session, cluster_name, region):
     try:

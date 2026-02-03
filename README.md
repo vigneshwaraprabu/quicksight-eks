@@ -10,38 +10,71 @@
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
 
+---
+
 ## Introduction
-This guide provides comprehensive steps to set up AWS QuickSight with EKS clusters, AWS Glue, and GitHub Actions using OIDC authentication.
+
+This guide provides comprehensive steps to set up AWS QuickSight with EKS clusters, AWS Glue, and GitHub Actions using OIDC authentication for secure, credential-free deployments.
+
+### What You'll Learn
+- How to configure OIDC authentication for GitHub Actions
+- Setting up EKS access with IAM roles
+- Creating AWS Glue crawlers for data cataloging
+- Visualizing data in Amazon QuickSight
+- Troubleshooting common issues
+
+---
 
 ## Prerequisites
-- AWS account with appropriate permissions
-- AWS CLI installed and configured
-- Python 3.11 or higher installed
-- Required Python libraries:
-  ```bash
-  pip install boto3 kubernetes
-  ```
-- GitHub repository with Actions enabled
-- Basic understanding of AWS IAM, EKS, and S3
+
+Before you begin, ensure you have:
+
+- ✅ AWS account with administrator or appropriate IAM permissions
+- ✅ AWS CLI installed and configured ([Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html))
+- ✅ Python 3.11 or higher installed
+- ✅ GitHub repository with Actions enabled
+- ✅ Basic understanding of AWS IAM, EKS, and S3
+
+### Install Required Dependencies
+
+```bash
+# Install Python libraries
+pip install boto3 kubernetes
+
+# Verify installations
+python3 --version
+aws --version
+kubectl version --client
+```
+
+---
 
 ## AWS OIDC Authentication Setup
 
-### 1. Create OIDC Identity Provider in AWS IAM
+OIDC (OpenID Connect) allows GitHub Actions to authenticate with AWS without storing long-lived credentials.
 
-1. Navigate to **AWS IAM Console** → **Identity Providers** → **Add Provider**
-2. Select **OpenID Connect**
-3. Configure the provider:
+### Step 1: Create OIDC Identity Provider in AWS IAM
+
+1. Open the **AWS IAM Console**
+2. Navigate to **Identity Providers** → **Add Provider**
+3. Select **OpenID Connect**
+4. Configure:
    - **Provider URL**: `https://token.actions.githubusercontent.com`
    - **Audience**: `sts.amazonaws.com`
-4. Click **Add Provider**
+5. Click **Get thumbprint** → **Add Provider**
 
-### 2. Create IAM Role for OIDC
+### Step 2: Create IAM Role for GitHub Actions
 
 1. Go to **IAM** → **Roles** → **Create Role**
 2. Select **Web Identity** as trusted entity type
-3. Choose the OIDC provider created above
-4. Attach necessary permissions policies (e.g., EKS read, EC2 describe, STS assume role)
-5. Configure the trust policy:
+3. Choose the OIDC provider you just created
+4. Select audience: `sts.amazonaws.com`
+5. Attach required policies:
+   - `AmazonEC2ReadOnlyAccess`
+   - `AmazonEKSClusterPolicy` (read-only)
+   - Custom policy for S3 and STS operations
+
+#### Trust Policy Configuration
 
 ```json
 {
@@ -66,7 +99,31 @@ This guide provides comprehensive steps to set up AWS QuickSight with EKS cluste
 }
 ```
 
-### 3. Update GitHub Actions Workflow
+> **Note**: Replace `YOUR_ORG/YOUR_REPO` with your actual GitHub repository path (e.g., `myorg/quicksight-project`)
+
+#### Permissions Policy for OIDC Role
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeTargetRoles",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::853973692277:role/EC2RoleforMSK"
+    },
+    {
+      "Sid": "GetCallerIdentity",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+### Step 3: Update GitHub Actions Workflow
 
 Create or update `.github/workflows/eks-inventory.yml`:
 
@@ -77,17 +134,31 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - 'custom_script.py'
+      - '.github/workflows/eks-inventory.yml'
 
 permissions:
-  id-token: write   # Required for OIDC JWT
-  contents: read    # Required for checkout
+  id-token: write   # Required for requesting JWT token
+  contents: read    # Required for actions/checkout
 
 jobs:
   run-inventory:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 kubernetes
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -95,28 +166,55 @@ jobs:
           role-to-assume: arn:aws:iam::853973692277:role/GithubActionsRole
           aws-region: us-east-1
 
-      - name: Run inventory script
+      - name: Verify AWS Identity
         run: |
-          python3 custom_script.py --bucket your-bucket --account-list accounts.csv
+          echo "Authenticated as:"
+          aws sts get-caller-identity
+
+      - name: Run EKS inventory script
+        run: |
+          python3 custom_script.py --bucket vignesh-s3-debezium-test --account-list accounts.csv
+
+      - name: Upload output artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eks-inventory-report
+          path: output.csv
 ```
 
-### 4. Benefits of OIDC
+### Benefits of OIDC
 
-- ✅ No long-lived credentials stored in GitHub Secrets
-- ✅ Automatic credential rotation
-- ✅ Enhanced security posture
-- ✅ Reduced risk of credential leakage
-- ✅ Fine-grained access control with conditions
+| Benefit | Description |
+|---------|-------------|
+| 🔒 **No Stored Secrets** | No long-lived credentials in GitHub Secrets |
+| 🔄 **Auto-Rotation** | Tokens are short-lived and automatically refreshed |
+| 🛡️ **Enhanced Security** | Reduced risk of credential leakage |
+| 🎯 **Fine-Grained Control** | Restrict access by repository, branch, or environment |
+| 📊 **Audit Trail** | Better tracking of who accessed what |
+
+---
 
 ## EKS Access Configuration
 
-### Understanding Role Hierarchy
+### Understanding the Authentication Flow
 
-**Important**: The OIDC role (e.g., `GithubActionsRole`) is only used for initial authentication. The script then assumes roles specified in `accounts.csv` (e.g., `EC2RoleforMSK`) to access EKS clusters. **The role in accounts.csv must have EKS access entries.**
+```
+GitHub Actions (OIDC)
+       ↓
+GithubActionsRole (Initial Auth)
+       ↓
+Assumes → EC2RoleforMSK (from accounts.csv)
+       ↓
+Accesses → EKS Cluster
+```
 
-### 1. Required IAM Permissions
+> **Important**: The OIDC role only provides initial authentication. The role in `accounts.csv` is what actually accesses the EKS clusters and must have proper EKS access entries.
 
-The role in `accounts.csv` needs the following permissions:
+### Step 1: Required IAM Permissions
+
+The role specified in `accounts.csv` (e.g., `EC2RoleforMSK`) needs these permissions:
+
+#### Inline Policy: EKS-And-EC2-ReadAccess
 
 ```json
 {
@@ -144,13 +242,19 @@ The role in `accounts.csv` needs the following permissions:
       "Resource": "*"
     },
     {
+      "Sid": "SSMParameterAccess",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*"
+    },
+    {
       "Sid": "STSCallerIdentity",
       "Effect": "Allow",
       "Action": "sts:GetCallerIdentity",
       "Resource": "*"
     },
     {
-      "Sid": "S3Access",
+      "Sid": "S3BucketAccess",
       "Effect": "Allow",
       "Action": [
         "s3:PutObject",
@@ -158,41 +262,64 @@ The role in `accounts.csv` needs the following permissions:
         "s3:ListBucket"
       ],
       "Resource": [
-        "arn:aws:s3:::your-bucket-name",
-        "arn:aws:s3:::your-bucket-name/*"
+        "arn:aws:s3:::vignesh-s3-debezium-test",
+        "arn:aws:s3:::vignesh-s3-debezium-test/*"
       ]
     }
   ]
 }
 ```
 
-### 2. Create EKS Access Entry
+### Step 2: Create EKS Access Entries
 
-For each EKS cluster, add the role from `accounts.csv`:
+For **each** EKS cluster, add the role from `accounts.csv`:
 
 ```bash
+# Set variables
+CLUSTER_NAME="poc-cluster1"
+ROLE_ARN="arn:aws:iam::853973692277:role/EC2RoleforMSK"
+REGION="us-east-1"
+
 # Create access entry
 aws eks create-access-entry \
-  --cluster-name poc-cluster1 \
+  --cluster-name $CLUSTER_NAME \
+  --principal-arn $ROLE_ARN \
+  --type STANDARD \
+  --region $REGION
+
+# Associate cluster admin policy
+aws eks associate-access-policy \
+  --cluster-name $CLUSTER_NAME \
+  --principal-arn $ROLE_ARN \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+  --access-scope type=cluster \
+  --region $REGION
+
+# Verify access entries
+aws eks list-access-entries \
+  --cluster-name $CLUSTER_NAME \
+  --region $REGION
+```
+
+#### Repeat for All Clusters
+
+```bash
+# For pradeep-modmed-cluster
+aws eks create-access-entry \
+  --cluster-name pradeep-modmed-cluster \
   --principal-arn arn:aws:iam::853973692277:role/EC2RoleforMSK \
   --type STANDARD \
   --region us-east-1
 
-# Associate admin policy
 aws eks associate-access-policy \
-  --cluster-name poc-cluster1 \
+  --cluster-name pradeep-modmed-cluster \
   --principal-arn arn:aws:iam::853973692277:role/EC2RoleforMSK \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
   --access-scope type=cluster \
   --region us-east-1
-
-# Verify access entries
-aws eks list-access-entries \
-  --cluster-name poc-cluster1 \
-  --region us-east-1
 ```
 
-### 3. Verify Configuration
+### Step 3: Verify Configuration
 
 ```bash
 # Test role assumption
@@ -203,56 +330,34 @@ aws sts assume-role \
 # Verify identity
 aws sts get-caller-identity
 
-# Test EKS access
+# Test EKS cluster access
 aws eks describe-cluster \
   --name poc-cluster1 \
   --region us-east-1
+
+# Test kubectl access
+aws eks update-kubeconfig \
+  --name poc-cluster1 \
+  --region us-east-1
+
+kubectl get nodes
 ```
+
+---
 
 ## AWS Glue Crawler Setup
 
-### 1. Create Glue Crawler
+AWS Glue crawlers automatically discover and catalog data schema from S3.
 
-1. Open **AWS Glue Console**
-2. Navigate to **Crawlers** → **Create crawler**
-3. Configure crawler:
-   - **Name**: `output-csv-crawler`
-   - **Data source**: S3
-   - **Path**: `s3://vignesh-s3-debezium-test/reports/`
-   - **Crawl all sub-folders**: Yes (if needed)
+### Step 1: Create IAM Role for Glue Crawler
 
-### 2. Configure IAM Role
+1. Go to **IAM** → **Roles** → **Create Role**
+2. Select **AWS Glue** as the service
+3. Attach policies:
+   - `AWSGlueServiceRole`
+   - Custom S3 policy (see below)
 
-Create or select an IAM role with:
-- S3 read permissions for the data bucket
-- Glue service permissions
-- Write access to Glue Data Catalog
-
-### 3. Set Output Configuration
-
-- **Database**: Create or select existing database
-- **Table prefix**: Optional prefix for created tables
-- **Update behavior**: Choose appropriate update mode
-
-### 4. Run Crawler
-
-1. Run the crawler manually or on a schedule
-2. Verify table creation in **Glue Console** → **Databases** → **Tables**
-3. Check schema matches CSV structure
-
-## QuickSight Visualization
-
-### 1. Setup QuickSight Dataset
-
-1. Open **Amazon QuickSight Console**
-2. Navigate to **Datasets** → **New dataset**
-3. Select **AWS Glue** as data source
-4. Choose the Glue database and table created by crawler
-5. Configure data preview and import settings
-
-### 2. Configure QuickSight IAM Role
-
-Ensure the QuickSight service role has the following permissions:
+#### S3 Access Policy for Glue
 
 ```json
 {
@@ -266,6 +371,105 @@ Ensure the QuickSight service role has the following permissions:
       ],
       "Resource": [
         "arn:aws:s3:::vignesh-s3-debezium-test",
+        "arn:aws:s3:::vignesh-s3-debezium-test/reports/*"
+      ]
+    }
+  ]
+}
+```
+
+### Step 2: Create Glue Database
+
+```bash
+# Using AWS CLI
+aws glue create-database \
+  --database-input '{
+    "Name": "eks_inventory_db",
+    "Description": "Database for EKS inventory reports"
+  }' \
+  --region us-east-1
+
+# Or use AWS Console
+# Navigate to AWS Glue → Databases → Add database
+```
+
+### Step 3: Create and Configure Crawler
+
+1. Open **AWS Glue Console**
+2. Navigate to **Crawlers** → **Create crawler**
+3. Configure crawler settings:
+
+| Setting | Value |
+|---------|-------|
+| **Name** | `output-csv-crawler` |
+| **Data source** | S3 |
+| **S3 path** | `s3://vignesh-s3-debezium-test/reports/` |
+| **Crawl all sub-folders** | Yes |
+| **IAM role** | GlueServiceRole (created in Step 1) |
+| **Target database** | `eks_inventory_db` |
+| **Table prefix** | `eks_` (optional) |
+| **Schedule** | On demand or Daily at midnight |
+
+### Step 4: Run Crawler
+
+```bash
+# Start crawler using AWS CLI
+aws glue start-crawler \
+  --name output-csv-crawler \
+  --region us-east-1
+
+# Check crawler status
+aws glue get-crawler \
+  --name output-csv-crawler \
+  --region us-east-1 \
+  --query 'Crawler.State'
+```
+
+### Step 5: Verify Table Creation
+
+1. Go to **AWS Glue Console** → **Databases** → `eks_inventory_db`
+2. Click on **Tables** → Verify table created
+3. Check schema columns match CSV structure:
+   - AccountID
+   - Region
+   - ClusterName
+   - ClusterVersion
+   - InstanceID
+   - AMI_ID
+   - etc.
+
+---
+
+## QuickSight Visualization
+
+### Step 1: Setup QuickSight Account
+
+If you haven't already:
+
+1. Go to **Amazon QuickSight Console**
+2. Sign up for QuickSight (if first time)
+3. Choose **Enterprise** edition for full features
+4. Select region: `us-east-1`
+
+### Step 2: Configure QuickSight IAM Role
+
+1. Navigate to **QuickSight** → **Manage QuickSight** → **Security & permissions**
+2. Click on **Manage** under IAM role
+3. Add inline policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::vignesh-s3-debezium-test",
         "arn:aws:s3:::vignesh-s3-debezium-test/*"
       ]
     },
@@ -273,88 +477,127 @@ Ensure the QuickSight service role has the following permissions:
       "Effect": "Allow",
       "Action": [
         "glue:GetDatabase",
+        "glue:GetDatabases",
         "glue:GetTable",
+        "glue:GetTables",
+        "glue:GetPartition",
         "glue:GetPartitions"
       ],
-      "Resource": "*"
+      "Resource": [
+        "arn:aws:glue:us-east-1:853973692277:catalog",
+        "arn:aws:glue:us-east-1:853973692277:database/eks_inventory_db",
+        "arn:aws:glue:us-east-1:853973692277:table/eks_inventory_db/*"
+      ]
     }
   ]
 }
 ```
 
-### 3. Create Visualizations
+### Step 3: Create Dataset
 
-1. Create a new **Analysis** from the dataset
-2. Build visualizations using drag-and-drop interface
-3. Add filters, calculated fields, and parameters as needed
-4. Publish the analysis as a **Dashboard** for sharing
+1. Open **QuickSight Console**
+2. Click **Datasets** → **New dataset**
+3. Select **AWS Glue** as data source
+4. Configure connection:
+   - **Data source name**: `EKS Inventory`
+   - **Database**: `eks_inventory_db`
+   - **Table**: Select the table created by crawler
+5. Choose **Import to SPICE** for faster queries
+6. Click **Visualize**
+
+### Step 4: Create Analysis and Dashboard
+
+#### Sample Visualizations
+
+1. **Cluster Distribution by Region**
+   - Chart type: Pie chart
+   - Value: Count of ClusterName
+   - Group by: Region
+
+2. **Node Readiness Status**
+   - Chart type: KPI
+   - Value: Count of NodeReadinessStatus
+   - Filter: NodeReadinessStatus = "Ready"
+
+3. **AMI Age Distribution**
+   - Chart type: Bar chart
+   - Y-axis: Count of InstanceID
+   - X-axis: AMI_Age (bins)
+
+4. **Patch Status by Cluster**
+   - Chart type: Stacked bar chart
+   - Y-axis: Count
+   - X-axis: ClusterName
+   - Group by: PatchStatus
+
+#### Publish Dashboard
+
+1. Click **Share** → **Publish dashboard**
+2. Name: `EKS Inventory Dashboard`
+3. Grant access to users/groups
+4. Set refresh schedule (optional)
+
+---
 
 ## Troubleshooting
 
-### Error: 401 Unauthorized with OIDC
+### Common Issues and Solutions
+
+#### 1. Error: 401 Unauthorized When Accessing EKS
 
 **Symptoms:**
 ```
 ❌ Failed to fetch node readiness for cluster: (401)
 Reason: Unauthorized
-message":"Unauthorized","reason":"Unauthorized","code":401}
+HTTP response body: {"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"Unauthorized","reason":"Unauthorized","code":401}
 ```
 
-**Root Cause:** The role specified in `accounts.csv` (not the OIDC role) lacks EKS access entries.
+**Root Cause:**  
+The role in `accounts.csv` (e.g., `EC2RoleforMSK`) doesn't have EKS access entries.
 
 **Solution:**
 ```bash
-# Add the role from accounts.csv to EKS access entries
+# Add access entry for the role
 aws eks create-access-entry \
   --cluster-name YOUR_CLUSTER_NAME \
   --principal-arn arn:aws:iam::853973692277:role/EC2RoleforMSK \
-  --type STANDARD
+  --type STANDARD \
+  --region us-east-1
 
+# Associate admin policy
 aws eks associate-access-policy \
   --cluster-name YOUR_CLUSTER_NAME \
   --principal-arn arn:aws:iam::853973692277:role/EC2RoleforMSK \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
-  --access-scope type=cluster
+  --access-scope type=cluster \
+  --region us-east-1
+
+# Verify
+aws eks list-access-entries --cluster-name YOUR_CLUSTER_NAME
 ```
 
-### Error: Unhandled Kubernetes API Error
+#### 2. Error: Kubernetes Client Using Wrong Credentials
 
 **Symptoms:**
-```
-E0202 16:14:14.839654   13459 memcache.go:265] "Unhandled Error" 
-err="couldn't get current server API group list: the server has asked for the client to provide credentials"
-```
+- Works with admin access keys but fails with OIDC
+- `kubectl` commands work locally but not in GitHub Actions
 
-**Solution:** Ensure the IAM role has proper EKS access entries and the AWS credentials are correctly configured.
+**Root Cause:**  
+The Kubernetes Python client uses the AWS SDK's credential chain, which might pick up the original OIDC role credentials instead of the assumed role credentials.
 
-### Error: Forbidden - Cannot List Nodes
+**Solution:**  
+Explicitly set environment variables for the assumed role before making Kubernetes API calls:
 
-**Symptoms:**
-```
-Error from server (Forbidden): nodes is forbidden: 
-User "system:node:ip-10-0-12-76.ec2.internal" cannot list resource "nodes" 
-in API group "" at the cluster scope.
-```
-
-**Solution:** Create ClusterRole and ClusterRoleBinding for the role:
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: eks-admin-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: User
-  name: system:node:ip-10-0-12-76.ec2.internal
-EOF
+```python
+# Set environment variables before loading kubeconfig
+os.environ['AWS_ACCESS_KEY_ID'] = assumed_creds.access_key
+os.environ['AWS_SECRET_ACCESS_KEY'] = assumed_creds.secret_key
+os.environ['AWS_SESSION_TOKEN'] = assumed_creds.token
 ```
 
-### Error: QuickSight S3 Permission Denied
+See the `get_node_readiness()` function in `custom_script.py` for implementation details.
+
+#### 3. Error: QuickSight S3 Permission Denied
 
 **Symptoms:**
 ```
@@ -362,17 +605,104 @@ PERMISSION_DENIED: User: arn:aws:sts::853973692277:assumed-role/aws-quicksight-s
 is not authorized to perform: s3:ListBucket on resource: "arn:aws:s3:::vignesh-s3-debezium-test"
 ```
 
-**Solution:** Attach S3 permissions to the QuickSight service role:
-
+**Solution:**
 1. Navigate to **IAM** → **Roles** → `aws-quicksight-service-role-v0`
-2. Add inline policy with S3 ListBucket and GetObject permissions
-3. Specify the bucket ARN in the resource section
+2. Click **Add permissions** → **Create inline policy**
+3. Add the S3 policy shown in [Step 2](#step-2-configure-quicksight-iam-role)
+4. Save policy
+
+#### 4. Error: Glue Crawler Fails to Create Table
+
+**Symptoms:**
+- Crawler runs successfully but no table is created
+- Table schema is incorrect
+
+**Solution:**
+```bash
+# Check crawler logs
+aws glue get-crawler \
+  --name output-csv-crawler \
+  --query 'Crawler.LastCrawl'
+
+# Verify S3 path is correct
+aws s3 ls s3://vignesh-s3-debezium-test/reports/
+
+# Ensure CSV file has headers
+# Ensure file is not empty
+
+# Re-run crawler
+aws glue start-crawler --name output-csv-crawler
+```
+
+#### 5. Error: GitHub Actions OIDC Token Expired
+
+**Symptoms:**
+```
+Error: Could not assume role with OIDC: Token has expired
+```
+
+**Solution:**
+- OIDC tokens are short-lived (typically 1 hour)
+- Ensure the workflow completes within the token validity period
+- If needed, split long-running jobs into multiple workflows
+
+---
+
+## Best Practices
+
+### Security
+
+- ✅ Use OIDC instead of long-lived credentials
+- ✅ Apply least privilege principle to IAM roles
+- ✅ Use separate roles for different environments (dev, staging, prod)
+- ✅ Enable AWS CloudTrail for audit logging
+- ✅ Regularly rotate IAM access keys (if any)
+
+### Performance
+
+- ✅ Use SPICE in QuickSight for faster queries
+- ✅ Schedule Glue crawlers during off-peak hours
+- ✅ Implement pagination in Python scripts for large datasets
+- ✅ Cache EKS cluster information when possible
+
+### Monitoring
+
+- ✅ Set up CloudWatch alarms for failed GitHub Actions
+- ✅ Monitor Glue crawler success/failure rates
+- ✅ Track S3 bucket size and costs
+- ✅ Use QuickSight usage metrics
+
+---
 
 ## References
 
+### AWS Documentation
 - [AWS QuickSight Permission Errors](https://repost.aws/knowledge-center/quicksight-permission-errors)
-- [GitHub Actions OIDC with AWS](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
 - [EKS Access Entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html)
 - [AWS Glue Crawlers](https://docs.aws.amazon.com/glue/latest/dg/add-crawler.html)
+- [IAM Roles for OIDC](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_oidc.html)
 
+### GitHub Documentation
+- [GitHub Actions OIDC with AWS](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services)
+- [AWS Actions Configure Credentials](https://github.com/aws-actions/configure-aws-credentials)
+
+### Additional Resources
+- [Boto3 Documentation](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)
+- [Kubernetes Python Client](https://github.com/kubernetes-client/python)
+- [AWS CLI Command Reference](https://awscli.amazonaws.com/v2/documentation/api/latest/index.html)
+
+---
+
+## Support
+
+For issues or questions:
+1. Check the [Troubleshooting](#troubleshooting) section
+2. Review GitHub Actions workflow logs
+3. Check AWS CloudWatch logs for detailed error messages
+4. Consult AWS documentation links above
+
+---
+
+**Last Updated:** February 2025  
+**Version:** 1.0
 
