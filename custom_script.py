@@ -165,12 +165,15 @@ def get_patch_status(ami_age_str):
     if ami_age_str and "days" in str(ami_age_str):
         try:
             days = int(str(ami_age_str).split()[0])
-            return str(days < 30)
+            return 1 if days < 30 else 0
         except Exception:
             return 0
     return 0
 
 def write_node_row(writer, account_id, region, cluster, cluster_version, node, latest_ami, patch_status, node_readiness):
+    # Ensure patch_status is always 0 or 1, node_readiness is 0 or 1 (Ready=1, NotReady=0)
+    patch_status = 1 if patch_status == 1 else 0
+    readiness_val = 1 if node_readiness == "Ready" else 0
     writer.writerow([
         account_id,
         region,
@@ -184,8 +187,8 @@ def write_node_row(writer, account_id, region, cluster, cluster_version, node, l
         node.get("NodeState", 0) or 0,
         node.get("NodeUptime", 0) or 0,
         str(latest_ami) if latest_ami is not None else "0",
-        patch_status or 0,
-        node_readiness or 0
+        patch_status,
+        readiness_val
     ])
 
 def process_clusters(session, writer, account_id, region):
