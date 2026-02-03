@@ -53,7 +53,7 @@ jobs:
       - name: Run EKS Inventory Script
         run: |
           pwd; ls;
-          python custom_script.py --bucket "$EKS_INVENTORY_BUCKET" --account-list "$EKS_INVENTORY_ACCOUNT_LIST" --prefix "$EKS_INVENTORY_PREFIX"
+          python custom_script.py --bucket "$EKS_INVENTORY_BUCKET" --account-list "accounts.csv" --prefix "$EKS_INVENTORY_PREFIX"
 
       - name: Upload output.csv as artifact
         uses: actions/upload-artifact@v4
