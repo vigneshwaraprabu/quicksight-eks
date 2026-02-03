@@ -47,7 +47,7 @@ jobs:
       - name: Set environment variables for script
         run: |
           echo "EKS_INVENTORY_BUCKET=${{ secrets.EKS_INVENTORY_BUCKET }}" >> $GITHUB_ENV
-          echo "EKS_INVENTORY_ACCOUNT_LIST=${{ secrets.EKS_INVENTORY_ACCOUNT_LIST }}" >> $GITHUB_ENV
+          echo "EKS_INVENTORY_ACCOUNT_LIST=accounts.csv" >> $GITHUB_ENV
           echo "EKS_INVENTORY_PREFIX=${{ secrets.EKS_INVENTORY_PREFIX }}" >> $GITHUB_ENV
 
       - name: Run EKS Inventory Script
