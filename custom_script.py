@@ -1,4 +1,4 @@
-import csv
+import csv, os
 import boto3
 from botocore.exceptions import ClientError
 from datetime import datetime, timezone
@@ -84,22 +84,39 @@ def parse_ami_info(ami_info):
 
 def get_node_readiness(instance_ids):
     try:
-        kubernetes.config.load_kube_config()
-        v1 = k8s.CoreV1Api()
-        k8s_nodes = v1.list_node()
-        readiness_map = {}
-        for k_node in k8s_nodes.items:
-            provider_id = k_node.spec.provider_id
-            if provider_id and provider_id.startswith('aws:///'):
-                instance_id = provider_id.split('/')[-1]
-                if instance_id in instance_ids:
-                    conditions = k_node.status.conditions or []
-                    ready = any(c.type == 'Ready' and c.status == 'True' for c in conditions)
-                    readiness_map[instance_id] = "Ready" if ready else "NotReady"
-        for iid in instance_ids:
-            if iid not in readiness_map:
-                readiness_map[iid] = "Unknown"
-        return readiness_map
+        # Try to select the context matching the cluster name
+        kubeconfig_env = os.environ.get("KUBECONFIG", "~/.kube/config")
+        kubeconfig_paths = kubeconfig_env.split(":") if ":" in kubeconfig_env else [kubeconfig_env]
+        # Try all kubeconfigs, select the context that matches the cluster name
+        # The cluster name will be passed as a global variable (set in get_node_details)
+        cluster_name = globals().get("__CURRENT_CLUSTER_NAME__")
+        for kubeconfig_path in kubeconfig_paths:
+            kubeconfig_path = os.path.expanduser(kubeconfig_path)
+            try:
+                contexts, active_context = kubernetes.config.list_kube_config_contexts(config_file=kubeconfig_path)
+                for ctx in contexts:
+                    if cluster_name and (cluster_name in ctx["name"]):
+                        print(f"[DEBUG] Loading kubeconfig {kubeconfig_path} with context {ctx['name']} for cluster {cluster_name}")
+                        kubernetes.config.load_kube_config(config_file=kubeconfig_path, context=ctx["name"])
+                        v1 = k8s.CoreV1Api()
+                        k8s_nodes = v1.list_node()
+                        readiness_map = {}
+                        for k_node in k8s_nodes.items:
+                            provider_id = k_node.spec.provider_id
+                            if provider_id and provider_id.startswith('aws:///'):
+                                instance_id = provider_id.split('/')[-1]
+                                if instance_id in instance_ids:
+                                    conditions = k_node.status.conditions or []
+                                    ready = any(c.type == 'Ready' and c.status == 'True' for c in conditions)
+                                    readiness_map[instance_id] = "Ready" if ready else "NotReady"
+                        for iid in instance_ids:
+                            if iid not in readiness_map:
+                                readiness_map[iid] = "Unknown"
+                        return readiness_map
+            except Exception as e:
+                continue
+        print(f"[WARN] No matching kubeconfig context found for cluster {cluster_name}")
+        return {iid: "Unknown" for iid in instance_ids}
     except Exception as e:
         print(f"Failed to fetch node readiness from Kubernetes API: {e}")
         return {iid: "Unknown" for iid in instance_ids}
@@ -144,6 +161,8 @@ def get_node_details(session, cluster_name, region):
         for node in nodes:
             ami_info = ami_data.get(node["AMI_ID"], {"CreationDate": 0, "Description": ""})
             node["AMI_Age"], node["OS_Version"] = parse_ami_info(ami_info)
+        # Set global variable for context switching
+        globals()["__CURRENT_CLUSTER_NAME__"] = cluster_name
         readiness_map = get_node_readiness(instance_ids)
         for node in nodes:
             node["NodeReadinessStatus"] = readiness_map.get(node["InstanceID"], 0)
