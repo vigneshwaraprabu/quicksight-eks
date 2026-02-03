@@ -183,8 +183,6 @@ def write_node_row(w, aid, reg, cl, ver, n, lami, pstat, nready):
         nready or 0
     ])
 
-
-
 def process_clusters(session, w, aid, reg):
     clusters = list_eks_clusters(session, reg)
     print("EKS Clusters:")
