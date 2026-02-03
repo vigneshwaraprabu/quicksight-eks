@@ -4,6 +4,9 @@ from botocore.exceptions import ClientError
 from datetime import datetime, timezone
 import kubernetes.client as k8s
 import kubernetes.config
+import subprocess
+import tempfile
+import os
 
 def assume_role(account_id, role_name, region):
     sts = boto3.client("sts", region_name=region)
@@ -82,28 +85,87 @@ def parse_ami_info(ami_info):
     return ami_age, os_version
 
 
-def get_node_readiness(instance_ids):
+# def get_node_readiness(instance_ids):
+#     try:
+#         kubernetes.config.load_kube_config()
+#         v1 = k8s.CoreV1Api()
+#         k8s_nodes = v1.list_node()
+#         readiness_map = {}
+#         for k_node in k8s_nodes.items:
+#             provider_id = k_node.spec.provider_id
+#             if provider_id and provider_id.startswith('aws:///'):
+#                 instance_id = provider_id.split('/')[-1]
+#                 if instance_id in instance_ids:
+#                     conditions = k_node.status.conditions or []
+#                     ready = any(c.type == 'Ready' and c.status == 'True' for c in conditions)
+#                     readiness_map[instance_id] = "Ready" if ready else "NotReady"
+#         for iid in instance_ids:
+#             if iid not in readiness_map:
+#                 readiness_map[iid] = "Unknown"
+#         return readiness_map
+#     except Exception as e:
+#         print(f"Failed to fetch node readiness from Kubernetes API: {e}")
+#         return {iid: "Unknown" for iid in instance_ids}
+
+def get_node_readiness(instance_ids, cluster_name, region, session):
+    kubeconfig_path = None
     try:
-        kubernetes.config.load_kube_config()
+        # Create temp kubeconfig
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            kubeconfig_path = tmp.name
+
+        creds = session.get_credentials().get_frozen_credentials()
+
+        env = os.environ.copy()
+        env.update({
+            "AWS_ACCESS_KEY_ID": creds.access_key,
+            "AWS_SECRET_ACCESS_KEY": creds.secret_key,
+            "AWS_SESSION_TOKEN": creds.token,
+            "KUBECONFIG": kubeconfig_path
+        })
+
+        # Generate kubeconfig dynamically
+        subprocess.check_call(
+            [
+                "aws", "eks", "update-kubeconfig",
+                "--name", cluster_name,
+                "--region", region
+            ],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
+        # Load kubeconfig & query k8s
+        kubernetes.config.load_kube_config(config_file=kubeconfig_path)
         v1 = k8s.CoreV1Api()
         k8s_nodes = v1.list_node()
+
         readiness_map = {}
-        for k_node in k8s_nodes.items:
-            provider_id = k_node.spec.provider_id
-            if provider_id and provider_id.startswith('aws:///'):
-                instance_id = provider_id.split('/')[-1]
+        for node in k8s_nodes.items:
+            provider_id = node.spec.provider_id
+            if provider_id and provider_id.startswith("aws:///"):
+                instance_id = provider_id.split("/")[-1]
                 if instance_id in instance_ids:
-                    conditions = k_node.status.conditions or []
-                    ready = any(c.type == 'Ready' and c.status == 'True' for c in conditions)
+                    conditions = node.status.conditions or []
+                    ready = any(
+                        c.type == "Ready" and c.status == "True"
+                        for c in conditions
+                    )
                     readiness_map[instance_id] = "Ready" if ready else "NotReady"
+
         for iid in instance_ids:
-            if iid not in readiness_map:
-                readiness_map[iid] = "Unknown"
+            readiness_map.setdefault(iid, "Unknown")
+
         return readiness_map
+
     except Exception as e:
-        print(f"Failed to fetch node readiness from Kubernetes API: {e}")
+        print(f"❌ Failed to fetch node readiness for cluster {cluster_name}: {e}")
         return {iid: "Unknown" for iid in instance_ids}
 
+    finally:
+        if kubeconfig_path and os.path.exists(kubeconfig_path):
+            os.remove(kubeconfig_path)
 
 def get_node_details(session, cluster_name, region):
     try:
@@ -144,7 +206,9 @@ def get_node_details(session, cluster_name, region):
         for node in nodes:
             ami_info = ami_data.get(node["AMI_ID"], {"CreationDate": 0, "Description": ""})
             node["AMI_Age"], node["OS_Version"] = parse_ami_info(ami_info)
-        readiness_map = get_node_readiness(instance_ids)
+        # readiness_map = get_node_readiness(instance_ids)
+        readiness_map = get_node_readiness(instance_ids, cluster_name, region, session)
+
         for node in nodes:
             node["NodeReadinessStatus"] = readiness_map.get(node["InstanceID"], 0)
         return nodes
