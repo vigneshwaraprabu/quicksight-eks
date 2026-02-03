@@ -168,10 +168,17 @@ def get_node_readiness(instance_ids, cluster_name, region, session):
 
         return readiness_map
 
+    except k8s.ApiException as e:
+        # Handle Kubernetes API exceptions without printing full traceback
+        if e.status == 401:
+            print(f"❌ Unauthorized access to cluster '{cluster_name}'. The IAM role may lack EKS access entries.")
+        elif e.status == 403:
+            print(f"❌ Forbidden access to cluster '{cluster_name}'. Check IAM permissions.")
+        else:
+            print(f"❌ Kubernetes API error for cluster '{cluster_name}': {e.reason}")
+        return {iid: "Unknown" for iid in instance_ids}
     except Exception as e:
-        print(f"❌ Failed to fetch node readiness for cluster {cluster_name}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Failed to fetch node readiness for cluster '{cluster_name}': {str(e)}")
         return {iid: "Unknown" for iid in instance_ids}
 
     finally:
