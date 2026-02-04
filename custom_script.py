@@ -258,13 +258,13 @@ def get_patch_status(ami_age_str):
     if ami_age_str and "days" in str(ami_age_str):
         try:
             days = int(str(ami_age_str).split()[0])
-            return 1 if days < 30 else 0
+            return "False" if days < 30 else "True"
         except Exception:
-            return 0
-    return 0
+            return "False"
+    return "False"
 
 def write_node_row(writer, account_id, region, cluster, cluster_version, node, latest_ami, patch_status, node_readiness):
-    patch_status = 1 if patch_status == 1 else 0
+    # patch_status is already "True" or "False" from get_patch_status
     # Print actual readiness status if available, else 0
     readiness_val = node_readiness if node_readiness in ("Ready", "NotReady") else 0
     writer.writerow([
@@ -334,7 +334,7 @@ def main():
         writer.writerow([
             "AccountID", "Region", "ClusterName", "ClusterVersion",
             "InstanceID", "AMI_ID", "AMI_Age", "OS_Version", "InstanceType", "NodeState", "NodeUptime",
-            "Latest_EKS_AMI", "PatchStatus", "NodeReadinessStatus"
+            "Latest_EKS_AMI", "PatchPendingStatus", "NodeReadinessStatus"
         ])
         with open(csv_file, newline="") as f:
             reader = csv.DictReader(f)
