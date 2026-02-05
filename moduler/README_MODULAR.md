@@ -310,3 +310,91 @@ Potential additions:
 - [ ] Detailed HTML reports
 - [ ] Multi-region SSO support
 - [ ] Custom role ARN format
+
+## Sample Execution
+
+```
+python3 eks_analyzer.py            ✔  39s  test   12:38:00 AM 
+
+====================================================================================================
+EKS CLUSTER ANALYZER (SSO)
+====================================================================================================
+
+INFO: Reading accounts from accounts.csv
+INFO: Found 2 account-region combination(s) to process
+
+====================================================================================================
+SSO AUTHENTICATION SETUP
+====================================================================================================
+INFO: Setting up SSO profiles for 1 account(s)
+INFO: Backed up AWS config to /Users/vigneshwaraprabu/.aws/config.backup_20260206_003804
+INFO: All SSO profiles already exist in AWS config
+
+INFO: Starting AWS SSO login for profile '853973692277'
+INFO: Browser will open for authentication
+INFO: SSO login successful
+
+====================================================================================================
+PROCESSING: Account 853973692277 | Region us-east-1
+====================================================================================================
+INFO: Account: 853973692277 (pcsg-devops) | Region: us-east-1 | UserId: AROA4NVGMN52SVTKL6LKV:vigneshwaraprabus@presidio.com | Arn: arn:aws:sts::853973692277:assumed-role/AWSReservedSSO_limited-admin_a5135278af25b35b/vigneshwaraprabus@presidio.com
+INFO: Account Name: pcsg-devops
+INFO: Found 2 cluster(s)
+
+INFO: Analyzing cluster: poc-cluster1
+  INFO: Version: 1.34
+  INFO: Fetching node details
+  INFO: Found 2 node(s)
+INFO: Generating kubeconfig for cluster 'poc-cluster1'
+INFO: Querying Kubernetes API for node status
+  INFO: Instance i-06b8ed7b5459232e1: t3.medium (Amazon Linux 2023)
+  INFO: Instance i-03eca8e9e1cdab9c1: t3.medium (Amazon Linux 2023)
+
+INFO: Analyzing cluster: test-ami
+  INFO: Version: 1.34
+  INFO: Fetching node details
+  INFO: Found 2 node(s)
+INFO: Generating kubeconfig for cluster 'test-ami'
+INFO: Querying Kubernetes API for node status
+  INFO: Instance i-027acf38936ef93ce: t3.medium (Amazon Linux 2023)
+  INFO: Instance i-0c0f7a1c9b5565e50: t3.medium (Amazon Linux 2023)
+
+INFO: Completed analysis for 853973692277 (us-east-1)
+
+====================================================================================================
+PROCESSING: Account 853973692277 | Region us-west-2
+====================================================================================================
+INFO: Account: 853973692277 (pcsg-devops) | Region: us-west-2 | UserId: AROA4NVGMN52SVTKL6LKV:vigneshwaraprabus@presidio.com | Arn: arn:aws:sts::853973692277:assumed-role/AWSReservedSSO_limited-admin_a5135278af25b35b/vigneshwaraprabus@presidio.com
+INFO: Account Name: pcsg-devops
+INFO: No EKS clusters found
+
+WARNING: No data collected for 853973692277 (us-west-2)
+
+====================================================================================================
+FINALIZING RESULTS
+====================================================================================================
+INFO: Results written to eks_analysis_output.csv
+
+INFO: Analysis complete
+INFO: Processed 2 account-region combination(s)
+INFO: Total records: 4
+INFO: Local output file: eks_analysis_output.csv
+
+====================================================================================================
+UPLOADING TO S3
+====================================================================================================
+
+INFO: Uploading to S3
+INFO: Bucket: vignesh-s3-debezium-test
+INFO: Key: reports/eks_analysis_output_06Feb2026_12_38AM.csv
+INFO: Successfully uploaded to s3://vignesh-s3-debezium-test/reports/eks_analysis_output_06Feb2026_12_38AM.csv
+
+====================================================================================================
+CLEANUP
+====================================================================================================
+INFO: Cleaning up SSO cache
+INFO: Cleaned up SSO cache at /Users/vigneshwaraprabu/.aws/sso/cache
+
+====================================================================================================
+```
+
