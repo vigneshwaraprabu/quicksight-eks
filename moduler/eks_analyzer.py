@@ -39,7 +39,7 @@ def main():
     accounts_data = {}
     for account_info in accounts:
         account_id = account_info["account_id"]
-        role_name = account_info.get("role_name", "limited-admin")
+        role_name = account_info["role_name"]
         accounts_data[account_id] = role_name
     
     print_section("SSO AUTHENTICATION SETUP")
