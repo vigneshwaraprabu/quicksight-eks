@@ -706,3 +706,40 @@ For issues or questions:
 **Last Updated:** February 2025  
 **Version:** 1.0
 
+
+SSO Based authentication:
+
+python3 sso_cli_based.py ## will login and print ec2 instances
+
+
+aws configure sso
+presidio-sandbox
+https://pcsg.awsapps.com/start/#/
+us-east-1
+
+aws configure sso                    253 ✘  test   01:33:09 PM 
+SSO session name (Recommended): presidio-sandbox
+SSO start URL [None]: https://pcsg.awsapps.com/start/#/
+SSO region [None]: us-east-1
+SSO registration scopes [sso:account:access]:
+Attempting to open your default browser.
+If the browser does not open, open the following URL:
+
+https://oidc.us-east-1.amazonaws.com/authorize?response_type=code&client_id=kK8DPRKuGyGwchxCKyDvInVzLWVhc3QtMQ&redirect_uri=http%3A%2F%2F127.0.0.1%3A61591%2Foauth%2Fcallback&state=958fdcc6-5156-4290-bc1d-b3e5bf533a59&code_challenge_method=S256&scopes=sso%3Aaccount%3Aaccess&code_challenge=ci6-PnXD9ASJukiR6EnPnmCsLhxZZm6MP4XRff3Hplg
+The only AWS account available to you is: 853973692277
+Using the account ID 853973692277
+The only role available to you is: limited-admin
+Using the role name "limited-admin"
+Default client Region [us-east-1]:
+CLI default output format (json if not specified) [None]:
+Profile name [limited-admin-853973692277]: presidio-sandbox
+To use this profile, specify the profile name using --profile, as shown:
+
+aws sts get-caller-identity --profile presidio-sandbox
+
+aws sso login --profile your-sso-profile
+
+
+
+
+
