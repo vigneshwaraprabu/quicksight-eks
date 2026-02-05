@@ -706,11 +706,9 @@ For issues or questions:
 **Last Updated:** February 2025  
 **Version:** 1.0
 
-
 SSO Based authentication:
 
 python3 sso_cli_based.py ## will login and print ec2 instances
-
 
 aws configure sso
 presidio-sandbox

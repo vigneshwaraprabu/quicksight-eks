@@ -7,7 +7,104 @@ import kubernetes.config
 import subprocess
 import tempfile
 import os
+import shutil
+from pathlib import Path
 
+# =========================
+# AWS SSO Configuration
+# =========================
+SSO_START_URL = "https://pcsg.awsapps.com/start/#/"  # Update with your SSO start URL
+SSO_REGION = "us-east-1"  # Update with your SSO region
+CONFIG_PATH = Path.home() / ".aws" / "config"
+
+# =========================
+# SSO Helper Functions
+# =========================
+def backup_file(path: Path) -> None:
+    """Create a backup of an existing file."""
+    if path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = path.with_suffix(f".backup_{timestamp}")
+        backup_path.write_text(path.read_text())
+        print(f"📋 Backed up existing file to {backup_path}")
+
+def setup_aws_config_for_accounts(accounts_data):
+    """Create AWS config file with SSO profiles for each account from CSV."""
+    backup_file(CONFIG_PATH)
+    
+    existing_content = ""
+    if CONFIG_PATH.exists():
+        existing_content = CONFIG_PATH.read_text()
+    
+    config_lines = []
+    for account_id, role_name in accounts_data.items():
+        profile_name = account_id
+        if f"[profile {profile_name}]" not in existing_content:
+            config_lines.append(f"[profile {profile_name}]")
+            config_lines.append(f"sso_start_url = {SSO_START_URL}")
+            config_lines.append(f"sso_region = {SSO_REGION}")
+            config_lines.append(f"sso_account_id = {account_id}")
+            config_lines.append(f"sso_role_name = {role_name}")
+            config_lines.append(f"region = us-east-1")
+            config_lines.append("")
+    
+    if config_lines:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CONFIG_PATH.open("a") as f:
+            f.write("\n" + "\n".join(config_lines))
+        print(f"✅ Added SSO profiles to {CONFIG_PATH}")
+    else:
+        print(f"ℹ️  All profiles already exist in {CONFIG_PATH}")
+
+def run_sso_login(profile_name: str) -> bool:
+    """Run AWS SSO login via CLI."""
+    print("\n🔐 Starting AWS SSO login...")
+    print("This will open your browser for authentication.")
+    
+    try:
+        result = subprocess.run(
+            ["aws", "sso", "login", "--profile", profile_name],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode == 0:
+            print("✅ SSO login successful!")
+            return True
+        else:
+            print(f"❌ SSO login failed: {result.stderr}")
+            return False
+    except FileNotFoundError:
+        print("❌ AWS CLI not found. Please install it first:")
+        print("   pip install awscli")
+        return False
+    except subprocess.TimeoutExpired:
+        print("❌ Login timed out")
+        return False
+    except Exception as e:
+        print(f"❌ Error during SSO login: {e}")
+        return False
+
+def cleanup_sso_cache() -> bool:
+    """Remove AWS SSO cache directory."""
+    sso_cache_dir = Path.home() / ".aws" / "sso" / "cache"
+    
+    if not sso_cache_dir.exists():
+        print("ℹ️  No SSO cache found to clean up.")
+        return True
+    
+    try:
+        shutil.rmtree(sso_cache_dir)
+        print(f"✅ Cleaned up SSO cache at {sso_cache_dir}")
+        return True
+    except Exception as e:
+        print(f"⚠️  Failed to clean up SSO cache: {e}")
+        return False
+
+# =========================
+# EKS Analysis Functions
+# =========================
 def print_caller_identity(session, account_id, region):
     sts = session.client("sts", region_name=region)
     identity = sts.get_caller_identity()
@@ -280,16 +377,54 @@ def process_clusters(session, writer, account_id, region):
         print(" - (none found)")
 
 def main():
-    csv_file = "accounts.csv"
+    csv_file = "accounts_sso.csv"  # Expected columns: account_id, role_name, region
     output_file = "output_sso.csv"
+    
+    print("=" * 100)
+    print("AWS SSO EKS Cluster Analysis")
+    print("=" * 100)
+    
+    # Step 1: Read accounts from CSV
+    print("\n[Step 1/4] Reading account information from CSV...")
+    accounts_data = {}  # {account_id: role_name}
+    account_regions = {}  # {account_id: [regions]}
+    
     try:
-        current_identity = get_current_identity()
-        current_account = current_identity["Account"]
-        current_arn = current_identity["Arn"]
-        print(f"🔑 Current Identity: {current_arn}")
-    except Exception:
-        current_account = None
-        current_arn = ""
+        with open(csv_file, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                account_id = row["account_id"].strip()
+                role_name = row.get("role_name", "limited-admin").strip()  # Default role if not specified
+                region_field = row["region"].strip()
+                regions = [r.strip() for r in region_field.split(",") if r.strip()]
+                
+                accounts_data[account_id] = role_name
+                account_regions[account_id] = regions
+        
+        print(f"✅ Found {len(accounts_data)} account(s) to process")
+    except FileNotFoundError:
+        print(f"❌ CSV file '{csv_file}' not found!")
+        print(f"Expected format: account_id,role_name,region")
+        return 1
+    except Exception as e:
+        print(f"❌ Error reading CSV file: {e}")
+        return 1
+    
+    # Step 2: Setup AWS config with SSO profiles
+    print("\n[Step 2/4] Setting up AWS SSO configuration...")
+    setup_aws_config_for_accounts(accounts_data)
+    
+    # Step 3: Authenticate via SSO
+    print("\n[Step 3/4] Authenticating via AWS SSO...")
+    first_account = list(accounts_data.keys())[0]
+    if not run_sso_login(first_account):
+        print("\n❌ Failed to authenticate. Exiting.")
+        return 1
+    
+    # Step 4: Process all accounts and regions
+    print("\n[Step 4/4] Processing EKS clusters for all accounts...")
+    print("=" * 100)
+    
     with open(output_file, "w", newline="") as out_f:
         writer = csv.writer(out_f)
         writer.writerow([
@@ -297,22 +432,37 @@ def main():
             "InstanceID", "AMI_ID", "AMI_Age", "OS_Version", "InstanceType", "NodeState", "NodeUptime",
             "Latest_EKS_AMI", "PatchPendingStatus", "NodeReadinessStatus"
         ])
-        with open(csv_file, newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                account_id = row["account_id"].strip()
-                region_field = row["region"].strip()
-                regions = [r.strip() for r in region_field.split(",") if r.strip()]
-                for region in regions:
-                    print(f"\n🔄 Processing account {account_id} ({region}) ...")
-                    try:
-                        session = boto3.Session(region_name=region)
-                        print_caller_identity(session, account_id, region)
-                        process_clusters(session, writer, account_id, region)
-                        print("✅ Success")
-                    except Exception as ex:
-                        print(f"❌ Error processing account {account_id} in {region}: {ex}")
-                    print(f"REGION_SUMMARY: account={account_id} region={region}")
+        
+        for account_id, regions in account_regions.items():
+            for region in regions:
+                print(f"\n🔄 Processing account {account_id} ({region}) ...")
+                try:
+                    # Create session using SSO profile
+                    session = boto3.Session(profile_name=account_id, region_name=region)
+                    print_caller_identity(session, account_id, region)
+                    process_clusters(session, writer, account_id, region)
+                    print("✅ Success")
+                except Exception as ex:
+                    print(f"❌ Error processing account {account_id} in {region}: {ex}")
+                print(f"REGION_SUMMARY: account={account_id} region={region}")
+    
+    print("\n" + "=" * 100)
+    print(f"✅ Done! Results written to {output_file}")
+    print("=" * 100)
+    
+    # Cleanup
+    print("\n[Cleanup] Removing SSO authentication cache...")
+    cleanup_sso_cache()
+    
+    return 0
 
 if __name__ == "__main__":
-    main()
+    try:
+        exit(main())
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Interrupted by user. Exiting.")
+        cleanup_sso_cache()
+        exit(130)
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        exit(1)

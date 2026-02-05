@@ -1,2 +1,2 @@
-account_id,region
-853973692277,"us-east-1,us-west-2"
+account_id,role_name,region
+853973692277,limited-admin,"us-east-1,us-west-2"
