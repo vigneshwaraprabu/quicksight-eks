@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
 import sys
+from typing import Dict
 from modules.aws_session import AWSSession
 from modules.csv_handler import CSVHandler
 from modules.cluster_analyzer import ClusterAnalyzer
+from modules.sso_auth import SSOAuthenticator
 
 
 def print_header():
     print("\n" + "=" * 100)
-    print("EKS CLUSTER ANALYZER")
+    print("EKS CLUSTER ANALYZER (SSO)")
     print("=" * 100 + "\n")
 
 
@@ -33,6 +35,22 @@ def main():
         return 1
     
     print(f"INFO: Found {len(accounts)} account-region combination(s) to process")
+    
+    accounts_data = {}
+    for account_info in accounts:
+        account_id = account_info["account_id"]
+        role_name = account_info.get("role_name", "limited-admin")
+        accounts_data[account_id] = role_name
+    
+    print_section("SSO AUTHENTICATION SETUP")
+    print(f"INFO: Setting up SSO profiles for {len(accounts_data)} account(s)")
+    SSOAuthenticator.setup_profiles(accounts_data)
+    
+    first_account = list(accounts_data.keys())[0]
+    if not SSOAuthenticator.authenticate(first_account):
+        print("ERROR: SSO authentication failed")
+        return 1
+    
     all_results = []
     
     for account_info in accounts:
@@ -42,11 +60,14 @@ def main():
         print_section(f"PROCESSING: Account {account_id} | Region {region}")
         
         try:
-            aws_session = AWSSession(region)
+            aws_session = AWSSession(region, profile_name=account_id)
             aws_session.print_identity(account_id)
             
+            account_name = aws_session.get_account_name()
+            print(f"INFO: Account Name: {account_name}")
+            
             analyzer = ClusterAnalyzer(aws_session.session, region)
-            results = analyzer.analyze_clusters(account_id)
+            results = analyzer.analyze_clusters(account_id, account_name)
             
             if results:
                 all_results.extend(results)
@@ -65,8 +86,11 @@ def main():
     print(f"INFO: Processed {len(accounts)} account-region combination(s)")
     print(f"INFO: Total records: {len(all_results)}")
     print(f"INFO: Output file: {output_file}")
-    print("\n" + "=" * 100 + "\n")
     
+    print("\nINFO: Cleaning up SSO cache")
+    SSOAuthenticator.cleanup_cache()
+    
+    print("\n" + "=" * 100 + "\n")
     return 0
 
 
@@ -75,6 +99,7 @@ if __name__ == "__main__":
         sys.exit(main())
     except KeyboardInterrupt:
         print("\nWARNING: Interrupted by user")
+        SSOAuthenticator.cleanup_cache()
         sys.exit(130)
     except Exception as e:
         print(f"\nCRITICAL: Unexpected error: {e}")

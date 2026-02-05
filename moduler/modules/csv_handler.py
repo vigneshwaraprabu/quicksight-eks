@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 class CSVHandler:
     
     HEADERS = [
-        "AccountID", "Region", "ClusterName", "ClusterVersion",
+        "AccountID", "AccountName", "Region", "ClusterName", "ClusterVersion",
         "InstanceID", "AMI_ID", "AMI_Age", "OS_Version", "InstanceType",
         "NodeState", "NodeUptime", "Latest_EKS_AMI", "PatchPendingStatus",
         "NodeReadinessStatus"
@@ -19,8 +19,13 @@ class CSVHandler:
                 reader = csv.DictReader(f)
                 for row in reader:
                     account_id = row["account_id"].strip()
+                    role_name = row.get("role_name", "limited-admin").strip()
                     regions = [r.strip() for r in row["region"].strip().split(",") if r.strip()]
-                    accounts.extend({"account_id": account_id, "region": region} for region in regions)
+                    accounts.extend({
+                        "account_id": account_id,
+                        "role_name": role_name,
+                        "region": region
+                    } for region in regions)
             return accounts
         except FileNotFoundError:
             print(f"ERROR: CSV file '{csv_file}' not found")

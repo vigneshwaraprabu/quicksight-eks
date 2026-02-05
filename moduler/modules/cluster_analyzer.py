@@ -20,7 +20,10 @@ class ClusterAnalyzer:
         self.node_ops = NodeOperations(session, region)
         self.k8s_ops = KubernetesOperations(session, region)
     
-    def analyze_clusters(self, account_id: str) -> List[Dict[str, Any]]:
+    def analyze_clusters(self, account_id: str, account_name: str = None) -> List[Dict[str, Any]]:
+        if account_name is None:
+            account_name = account_id
+        
         clusters = self.eks_ops.list_clusters()
         
         if not clusters:
@@ -32,12 +35,12 @@ class ClusterAnalyzer:
         
         for cluster_name in clusters:
             print(f"\nINFO: Analyzing cluster: {cluster_name}")
-            cluster_results = self._analyze_single_cluster(account_id, cluster_name)
+            cluster_results = self._analyze_single_cluster(account_id, account_name, cluster_name)
             results.extend(cluster_results)
         
         return results
     
-    def _analyze_single_cluster(self, account_id: str, cluster_name: str) -> List[Dict[str, Any]]:
+    def _analyze_single_cluster(self, account_id: str, account_name: str, cluster_name: str) -> List[Dict[str, Any]]:
         cluster_version = self.eks_ops.get_cluster_version(cluster_name)
         print(f"  INFO: Version: {cluster_version}")
         
@@ -50,14 +53,14 @@ class ClusterAnalyzer:
         
         if not nodes:
             print("  INFO: No running nodes found")
-            return [self._create_empty_row(account_id, cluster_name, cluster_version)]
+            return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version)]
         
         print(f"  INFO: Found {len(nodes)} node(s)")
         readiness_map = self.k8s_ops.get_node_readiness(instance_ids, cluster_name)
         
         results = []
         for node in nodes:
-            node_data = self._process_node(account_id, cluster_name, cluster_version, 
+            node_data = self._process_node(account_id, account_name, cluster_name, cluster_version, 
                                           node, latest_amis, readiness_map)
             results.append(node_data)
             print(f"  INFO: Instance {node['InstanceID']}: {node['InstanceType']} "
@@ -65,7 +68,7 @@ class ClusterAnalyzer:
         
         return results
     
-    def _process_node(self, account_id: str, cluster_name: str, cluster_version: str,
+    def _process_node(self, account_id: str, account_name: str, cluster_name: str, cluster_version: str,
                      node: Dict, latest_amis: Dict, readiness_map: Dict) -> Dict[str, Any]:
         os_version = node.get("OS_Version", "Unknown")
         os_key = self.OS_MAPPING.get(os_version)
@@ -75,6 +78,7 @@ class ClusterAnalyzer:
         
         return {
             "AccountID": account_id,
+            "AccountName": account_name,
             "Region": self.region,
             "ClusterName": cluster_name,
             "ClusterVersion": cluster_version,
@@ -90,10 +94,11 @@ class ClusterAnalyzer:
             "NodeReadinessStatus": readiness_status
         }
     
-    def _create_empty_row(self, account_id: str, cluster_name: str, 
+    def _create_empty_row(self, account_id: str, account_name: str, cluster_name: str, 
                          cluster_version: str) -> Dict[str, Any]:
         base_data = {
             "AccountID": account_id,
+            "AccountName": account_name,
             "Region": self.region,
             "ClusterName": cluster_name,
             "ClusterVersion": cluster_version
