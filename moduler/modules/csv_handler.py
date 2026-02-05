@@ -19,7 +19,12 @@ class CSVHandler:
                 reader = csv.DictReader(f)
                 for row in reader:
                     account_id = row["account_id"].strip()
-                    role_name = row.get("role_name", "limited-admin").strip()
+                    
+                    if "role_name" not in row or not row["role_name"].strip():
+                        print(f"ERROR: role_name is required for account {account_id}")
+                        continue
+                    
+                    role_name = row["role_name"].strip()
                     regions = [r.strip() for r in row["region"].strip().split(",") if r.strip()]
                     accounts.extend({
                         "account_id": account_id,
@@ -29,6 +34,9 @@ class CSVHandler:
             return accounts
         except FileNotFoundError:
             print(f"ERROR: CSV file '{csv_file}' not found")
+            return []
+        except KeyError as e:
+            print(f"ERROR: Missing required column in CSV: {e}")
             return []
         except Exception as e:
             print(f"ERROR: Failed to read CSV file: {e}")
