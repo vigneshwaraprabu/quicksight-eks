@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 import sys
+import argparse
 from typing import Dict
 from modules.aws_session import AWSSession
 from modules.csv_handler import CSVHandler
 from modules.cluster_analyzer import ClusterAnalyzer
 from modules.sso_auth import SSOAuthenticator
+from modules.s3_handler import S3Handler
 
 
 def print_header():
@@ -20,7 +22,22 @@ def print_section(title: str):
     print("=" * 100)
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='EKS Cluster Analyzer with SSO Authentication')
+    parser.add_argument('--s3-bucket', 
+                       default='vignesh-s3-debezium-test',
+                       help='S3 bucket name for output upload (default: vignesh-s3-debezium-test)')
+    parser.add_argument('--s3-prefix', 
+                       default='reports',
+                       help='S3 prefix/folder for output upload (default: reports)')
+    parser.add_argument('--skip-s3', 
+                       action='store_true',
+                       help='Skip S3 upload and only save locally')
+    return parser.parse_args()
+
+
 def main():
+    args = parse_arguments()
     csv_file = "accounts.csv"
     output_file = "eks_analysis_output.csv"
     
@@ -85,9 +102,23 @@ def main():
     print(f"\nINFO: Analysis complete")
     print(f"INFO: Processed {len(accounts)} account-region combination(s)")
     print(f"INFO: Total records: {len(all_results)}")
-    print(f"INFO: Output file: {output_file}")
+    print(f"INFO: Local output file: {output_file}")
     
-    print("\nINFO: Cleaning up SSO cache")
+    if not args.skip_s3:
+        print_section("UPLOADING TO S3")
+        first_account = list(accounts_data.keys())[0]
+        first_region = accounts[0]["region"]
+        s3_session = AWSSession(first_region, profile_name=first_account)
+        s3_handler = S3Handler(s3_session.session)
+        
+        upload_success = s3_handler.upload_file(output_file, args.s3_bucket, args.s3_prefix)
+        if not upload_success:
+            print("WARNING: S3 upload failed, but local file is available")
+    else:
+        print("\nINFO: Skipping S3 upload (--skip-s3 flag set)")
+    
+    print_section("CLEANUP")
+    print("INFO: Cleaning up SSO cache")
     SSOAuthenticator.cleanup_cache()
     
     print("\n" + "=" * 100 + "\n")
