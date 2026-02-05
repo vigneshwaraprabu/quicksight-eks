@@ -1,0 +1,7 @@
+2026-02-05 17:57:09,930 - INFO - --- Starting Audit: 853973692277 | us-east-1 ---
+2026-02-05 17:57:10,961 - INFO - Identity Role: arn:aws:iam::853973692277:role/AWSReservedSSO_limited-admin_a5135278af25b35b
+2026-02-05 17:57:15,081 - ERROR - K8s API failed for cluster poc-cluster1: Parameter validation failed:
+Unknown parameter in input: "Header", must be one of: 
+2026-02-05 17:57:17,240 - ERROR - K8s API failed for cluster test-ami: Parameter validation failed:
+Unknown parameter in input: "Header", must be one of: 
+2026-02-05 17:57:18,744 - INFO - Report uploaded successfully: eks-inventory-audit/eks_inventory_20260205_175717.csv
