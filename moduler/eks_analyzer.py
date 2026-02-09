@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import sys
 import argparse
 from typing import Dict
@@ -32,12 +33,18 @@ def main():
     
     Logger.header("EKS CLUSTER ANALYZER (SSO)")
     
+    if not os.path.exists(csv_file):
+        Logger.error(f"CSV file '{csv_file}' not found in current directory")
+        Logger.error(f"Current directory: {os.getcwd()}", indent=1)
+        return 1
+    
     Logger.info(f"Reading accounts from {csv_file}")
     csv_handler = CSVHandler()
     accounts = csv_handler.read_accounts(csv_file)
     
     if not accounts:
-        Logger.error("No accounts to process")
+        Logger.error("No valid accounts to process")
+        Logger.error("Check CSV format: account_id,role_name,region", indent=1)
         return 1
     
     Logger.success(f"Found {len(accounts)} account-region combination(s) to process")
@@ -82,7 +89,14 @@ def main():
                 Logger.warning(f"No data collected for {account_id} ({region})")
                 
         except Exception as e:
-            Logger.error(f"Failed to process {account_id} in {region}: {e}")
+            error_msg = str(e)
+            Logger.error(f"Failed to process {account_id} in {region}: {error_msg}")
+            if "NoCredentialProviders" in error_msg:
+                Logger.error("SSO credentials may have expired. Try re-authenticating", indent=1)
+            elif "InvalidClientTokenId" in error_msg:
+                Logger.error("Invalid credentials. Check SSO profile configuration", indent=1)
+            elif "AccessDenied" in error_msg:
+                Logger.error(f"Insufficient permissions for account {account_id}", indent=1)
             continue
     
     Logger.section("FINALIZING RESULTS")

@@ -26,13 +26,18 @@ class NodeOperations:
             for page in paginator.paginate(Filters=filters):
                 for reservation in page.get("Reservations", []):
                     for instance in reservation.get("Instances", []):
+                        instance_id = instance.get("InstanceId")
+                        if not instance_id:
+                            Logger.warning("Found instance without InstanceId, skipping", indent=1)
+                            continue
+                        
                         ami_id = instance.get("ImageId")
                         if ami_id:
                             ami_ids.add(ami_id)
                         
-                        instance_ids.append(instance["InstanceId"])
+                        instance_ids.append(instance_id)
                         nodes.append({
-                            "InstanceID": instance["InstanceId"],
+                            "InstanceID": instance_id,
                             "AMI_ID": ami_id or "N/A",
                             "InstanceType": instance.get("InstanceType", "N/A"),
                             "NodeState": instance.get("State", {}).get("Name", "N/A"),
@@ -44,7 +49,12 @@ class NodeOperations:
             
             return nodes, instance_ids
         except ClientError as e:
-            Logger.error(f"Failed to get nodes for cluster {cluster_name}: {e}")
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == 'UnauthorizedOperation':
+                Logger.error(f"Access denied to describe EC2 instances for cluster {cluster_name}")
+                Logger.error("Check IAM permissions: ec2:DescribeInstances", indent=1)
+            else:
+                Logger.error(f"Failed to get nodes for cluster {cluster_name}: {e}")
             return [], []
     
     def _enrich_with_ami_data(self, nodes: List[Dict], ami_ids: List[str]):

@@ -71,14 +71,27 @@ class SSOAuthenticator:
                 Logger.success("SSO login successful")
                 return True
             else:
-                Logger.error(f"SSO login failed: {result.stderr}")
+                error_msg = result.stderr.strip()
+                if "Could not find profile" in error_msg:
+                    Logger.error(f"Profile '{profile_name}' not found in AWS config")
+                elif "sso_start_url" in error_msg:
+                    Logger.error("Invalid SSO configuration. Check sso_start_url and sso_region")
+                elif "access token" in error_msg.lower():
+                    Logger.error("SSO session expired. Please authenticate again")
+                else:
+                    Logger.error(f"SSO login failed: {error_msg}")
+                Logger.error("Try running: aws sso login manually to diagnose", indent=1)
                 return False
                 
         except FileNotFoundError:
-            Logger.error("AWS CLI not found. Install with: pip install awscli")
+            Logger.error("AWS CLI not found. Install with: pip install awscli or brew install awscli")
             return False
         except subprocess.TimeoutExpired:
             Logger.error(f"Login timed out after {SSOAuthenticator.LOGIN_TIMEOUT}s")
+            Logger.error("User may not have completed browser authentication", indent=1)
+            return False
+        except PermissionError:
+            Logger.error("Permission denied executing AWS CLI")
             return False
         except Exception as e:
             Logger.error(f"SSO login error: {e}")

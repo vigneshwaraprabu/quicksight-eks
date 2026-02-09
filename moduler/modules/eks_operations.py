@@ -26,14 +26,32 @@ class EKSOperations:
                 clusters.extend(page.get("clusters", []))
             return clusters
         except ClientError as e:
-            Logger.error(f"Failed to list EKS clusters in {self.region}: {e}")
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == 'AccessDeniedException':
+                Logger.error(f"Access denied to list EKS clusters in {self.region}")
+                Logger.error("Check IAM permissions: eks:ListClusters", indent=1)
+            elif error_code == 'ExpiredTokenException':
+                Logger.error("AWS credentials expired. Re-authenticate with SSO")
+            elif error_code == 'InvalidParameterException':
+                Logger.error(f"Invalid region '{self.region}' for EKS")
+            else:
+                Logger.error(f"Failed to list EKS clusters in {self.region}: {e}")
             return []
     
     def get_cluster_version(self, cluster_name: str) -> str:
         try:
             response = self.eks_client.describe_cluster(name=cluster_name)
-            return response["cluster"]["version"]
-        except ClientError:
+            return response.get("cluster", {}).get("version", "N/A")
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            if error_code == 'ResourceNotFoundException':
+                Logger.warning(f"Cluster '{cluster_name}' not found", indent=1)
+            elif error_code == 'AccessDeniedException':
+                Logger.warning(f"Access denied to describe cluster '{cluster_name}'", indent=1)
+            else:
+                Logger.warning(f"Failed to get version for cluster '{cluster_name}': {e}", indent=1)
+            return "N/A"
+        except Exception:
             return "N/A"
     
     def get_latest_amis(self, version: str) -> Tuple[Dict[str, str], str]:

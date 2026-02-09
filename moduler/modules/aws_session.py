@@ -8,14 +8,23 @@ class AWSSession:
     def __init__(self, region: str, profile_name: Optional[str] = None):
         self.region = region
         self.profile_name = profile_name
-        if profile_name:
-            self.session = boto3.Session(profile_name=profile_name, region_name=region)
-        else:
-            self.session = boto3.Session(region_name=region)
+        try:
+            if profile_name:
+                self.session = boto3.Session(profile_name=profile_name, region_name=region)
+            else:
+                self.session = boto3.Session(region_name=region)
+        except Exception as e:
+            Logger.error(f"Failed to create AWS session: {e}")
+            raise
     
     def get_caller_identity(self) -> Dict[str, str]:
-        sts = self.session.client("sts", region_name=self.region)
-        return sts.get_caller_identity()
+        try:
+            sts = self.session.client("sts", region_name=self.region)
+            return sts.get_caller_identity()
+        except Exception as e:
+            Logger.error(f"Failed to get caller identity: {e}")
+            Logger.error("This usually means authentication failed or credentials expired", indent=1)
+            raise
     
     def get_account_name(self) -> str:
         try:
@@ -38,8 +47,12 @@ class AWSSession:
         return self.get_caller_identity()["Account"]
     
     def print_identity(self, account_id: str):
-        identity = self.get_caller_identity()
-        account_name = self.get_account_name()
-        Logger.info(f"Account: {account_id} ({account_name}) | Region: {self.region}")
-        Logger.info(f"UserId: {identity['UserId']}", indent=1)
-        Logger.info(f"Arn: {identity['Arn']}", indent=1)
+        try:
+            identity = self.get_caller_identity()
+            account_name = self.get_account_name()
+            Logger.info(f"Account: {account_id} ({account_name}) | Region: {self.region}")
+            Logger.info(f"UserId: {identity.get('UserId', 'N/A')}", indent=1)
+            Logger.info(f"Arn: {identity.get('Arn', 'N/A')}", indent=1)
+        except Exception as e:
+            Logger.error(f"Failed to retrieve identity: {e}")
+            raise
