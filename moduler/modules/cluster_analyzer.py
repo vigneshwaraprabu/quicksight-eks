@@ -74,17 +74,15 @@ class ClusterAnalyzer:
         try:
             os_version = node.get("OS_Version", "Unknown")
             os_key = self.OS_MAPPING.get(os_version)
-            latest_ami = latest_amis.get(os_key, "N/A") if latest_amis and os_key else "N/A"
-            patch_status = self.node_ops.get_patch_status(node.get("AMI_Age", "N/A"))
+            latest_ami = latest_amis.get(os_key, "N/A") if os_key else "N/A"
             instance_id = node.get("InstanceID", "N/A")
-            readiness_status = readiness_map.get(instance_id, "Unknown") if instance_id != "N/A" else "Unknown"
             
             return {
-                "AccountID": str(account_id) if account_id else "N/A",
-                "AccountName": str(account_name) if account_name else "N/A",
-                "Region": str(self.region) if self.region else "N/A",
-                "ClusterName": str(cluster_name) if cluster_name else "N/A",
-                "ClusterVersion": str(cluster_version) if cluster_version else "N/A",
+                "AccountID": account_id,
+                "AccountName": account_name,
+                "Region": self.region,
+                "ClusterName": cluster_name,
+                "ClusterVersion": cluster_version,
                 "InstanceID": instance_id,
                 "AMI_ID": node.get("AMI_ID", "N/A"),
                 "AMI_Age": node.get("AMI_Age", "N/A"),
@@ -93,8 +91,8 @@ class ClusterAnalyzer:
                 "NodeState": node.get("NodeState", "N/A"),
                 "NodeUptime": node.get("NodeUptime", "N/A"),
                 "Latest_EKS_AMI": latest_ami,
-                "PatchPendingStatus": patch_status,
-                "NodeReadinessStatus": readiness_status
+                "PatchPendingStatus": self.node_ops.get_patch_status(node.get("AMI_Age", "N/A")),
+                "NodeReadinessStatus": readiness_map.get(instance_id, "Unknown")
             }
         except Exception as e:
             Logger.warning(f"Error processing node data: {e}", indent=2)

@@ -117,10 +117,10 @@ class NodeOperations:
     
     @staticmethod
     def get_patch_status(ami_age_str: str) -> str:
-        if ami_age_str and "days" in ami_age_str:
+        if ami_age_str and ami_age_str != "N/A":
             try:
                 days = int(ami_age_str.split()[0])
                 return "True" if days >= NodeOperations.PATCH_THRESHOLD_DAYS else "False"
-            except Exception:
+            except (ValueError, IndexError):
                 pass
         return "False"

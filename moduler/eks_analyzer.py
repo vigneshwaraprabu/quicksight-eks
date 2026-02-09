@@ -49,22 +49,19 @@ def main():
     
     Logger.success(f"Found {len(accounts)} account-region combination(s) to process")
     
-    accounts_data = {}
-    for account_info in accounts:
-        account_id = account_info["account_id"]
-        role_name = account_info["role_name"]
-        accounts_data[account_id] = role_name
+    accounts_data = {acc["account_id"]: acc["role_name"] for acc in accounts}
     
     Logger.section("SSO AUTHENTICATION SETUP")
     Logger.info(f"Setting up SSO profiles for {len(accounts_data)} account(s)")
     SSOAuthenticator.setup_profiles(accounts_data)
     
-    first_account = list(accounts_data.keys())[0]
+    first_account = next(iter(accounts_data))
     if not SSOAuthenticator.authenticate(first_account):
         Logger.error("SSO authentication failed")
         return 1
     
     all_results = []
+    first_session = None
     
     for account_info in accounts:
         account_id = account_info["account_id"]
@@ -74,8 +71,10 @@ def main():
         
         try:
             aws_session = AWSSession(region, profile_name=account_id)
-            aws_session.print_identity(account_id)
+            if first_session is None:
+                first_session = aws_session
             
+            aws_session.print_identity(account_id)
             account_name = aws_session.get_account_name()
             Logger.info(f"Account Name: {account_name}")
             
@@ -109,15 +108,14 @@ def main():
     Logger.info(f"Local output file: {output_file}")
     
     if not args.skip_s3:
-        Logger.section("UPLOADING TO S3")
-        first_account = list(accounts_data.keys())[0]
-        first_region = accounts[0]["region"]
-        s3_session = AWSSession(first_region, profile_name=first_account)
-        s3_handler = S3Handler(s3_session.session)
-        
-        upload_success = s3_handler.upload_file(output_file, args.s3_bucket, args.s3_prefix)
-        if not upload_success:
-            Logger.warning("S3 upload failed, but local file is available")
+        if first_session:
+            Logger.section("UPLOADING TO S3")
+            s3_handler = S3Handler(first_session.session)
+            upload_success = s3_handler.upload_file(output_file, args.s3_bucket, args.s3_prefix)
+            if not upload_success:
+                Logger.warning("S3 upload failed, but local file is available")
+        else:
+            Logger.warning("No session available for S3 upload")
     else:
         Logger.info("Skipping S3 upload (--skip-s3 flag set)")
     

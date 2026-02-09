@@ -27,16 +27,15 @@ class SSOAuthenticator:
     def setup_profiles(accounts_data: Dict[str, str]):
         SSOAuthenticator.backup_config()
         
-        existing_content = ""
-        if SSOAuthenticator.CONFIG_PATH.exists():
-            existing_content = SSOAuthenticator.CONFIG_PATH.read_text()
+        existing_content = SSOAuthenticator.CONFIG_PATH.read_text() if SSOAuthenticator.CONFIG_PATH.exists() else ""
         
         config_lines = []
+        profiles_to_add = 0
         for account_id, role_name in accounts_data.items():
-            profile_name = account_id
-            if f"[profile {profile_name}]" not in existing_content:
+            if f"[profile {account_id}]" not in existing_content:
+                profiles_to_add += 1
                 config_lines.extend([
-                    f"[profile {profile_name}]",
+                    f"[profile {account_id}]",
                     f"sso_start_url = {SSOAuthenticator.SSO_START_URL}",
                     f"sso_region = {SSOAuthenticator.SSO_REGION}",
                     f"sso_account_id = {account_id}",
@@ -49,7 +48,7 @@ class SSOAuthenticator:
             SSOAuthenticator.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             with SSOAuthenticator.CONFIG_PATH.open("a") as f:
                 f.write("\n" + "\n".join(config_lines))
-            Logger.success(f"Added {len(accounts_data)} SSO profile(s) to AWS config")
+            Logger.success(f"Added {profiles_to_add} SSO profile(s) to AWS config")
         else:
             Logger.info("All SSO profiles already exist in AWS config")
     

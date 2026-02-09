@@ -29,37 +29,29 @@ class CSVHandler:
                     Logger.error(f"CSV missing required columns: {', '.join(missing_columns)}")
                     return []
                 
-                line_num = 1
-                for row in reader:
-                    line_num += 1
-                    
+                valid_region_prefixes = ("us-", "eu-", "ap-", "sa-", "ca-", "me-", "af-")
+                
+                for line_num, row in enumerate(reader, start=2):
                     account_id = row.get("account_id", "").strip()
-                    if not account_id:
-                        Logger.warning(f"Line {line_num}: Empty account_id, skipping row")
-                        continue
+                    role_name = row.get("role_name", "").strip()
+                    region_value = row.get("region", "").strip()
                     
-                    if not account_id.isdigit() or len(account_id) != 12:
+                    if not account_id or not account_id.isdigit() or len(account_id) != 12:
                         Logger.warning(f"Line {line_num}: Invalid account_id '{account_id}' (must be 12 digits), skipping")
                         continue
                     
-                    role_name = row.get("role_name", "").strip()
-                    if not role_name:
-                        Logger.error(f"Line {line_num}: role_name is required for account {account_id}, skipping")
-                        continue
-                    
-                    region_value = row.get("region", "").strip()
-                    if not region_value:
-                        Logger.error(f"Line {line_num}: region is required for account {account_id}, skipping")
+                    if not role_name or not region_value:
+                        Logger.error(f"Line {line_num}: role_name and region are required, skipping")
                         continue
                     
                     regions = [r.strip() for r in region_value.split(",") if r.strip()]
                     if not regions:
-                        Logger.error(f"Line {line_num}: No valid regions found for account {account_id}, skipping")
+                        Logger.error(f"Line {line_num}: No valid regions found, skipping")
                         continue
                     
                     for region in regions:
-                        if not region.startswith(("us-", "eu-", "ap-", "sa-", "ca-", "me-", "af-")):
-                            Logger.warning(f"Line {line_num}: Region '{region}' may be invalid for account {account_id}")
+                        if not region.startswith(valid_region_prefixes):
+                            Logger.warning(f"Line {line_num}: Region '{region}' may be invalid")
                         
                         accounts.append({
                             "account_id": account_id,
