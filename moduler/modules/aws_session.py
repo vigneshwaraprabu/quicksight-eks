@@ -39,21 +39,22 @@ class AWSSession:
         account_id = identity["Account"]
         
         try:
+            organizations = self.session.client("organizations", region_name=self.region)
+            response = organizations.describe_account(AccountId=account_id)
+            account_name = response["Account"].get("Name", account_id)
+            if account_name:
+                self._account_name_cache = account_name
+                return self._account_name_cache
+        except Exception:
+            pass
+        
+        try:
             iam = self.session.client("iam", region_name=self.region)
             response = iam.list_account_aliases()
             aliases = response.get("AccountAliases", [])
             if aliases:
                 self._account_name_cache = aliases[0]
                 return self._account_name_cache
-        except Exception:
-            pass
-        
-        try:
-            organizations = self.session.client("organizations", region_name=self.region)
-            response = organizations.describe_account(AccountId=account_id)
-            account_name = response["Account"].get("Name", account_id)
-            self._account_name_cache = account_name
-            return self._account_name_cache
         except Exception:
             pass
         
