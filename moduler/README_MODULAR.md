@@ -398,3 +398,74 @@ INFO: Cleaned up SSO cache at /Users/vigneshwaraprabu/.aws/sso/cache
 ====================================================================================================
 ```
 
+## Common Errors and Solutions
+
+### Error 1: NameError - 'exit' is not defined
+
+**Error Message:**
+```
+Unexpected error: name 'exit' is not defined
+Traceback (most recent call last):
+  File "D:\Users\vigneshwaraprabu.s\Downloads\custom_script_sso.py", line 462, in <module>
+    exit(main())
+    ^^^^
+NameError: name 'exit' is not defined
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\Users\vigneshwaraprabu.s\Downloads\custom_script_sso.py", line 469, in <module>
+    exit(1)
+    ^^^^
+NameError: name 'exit' is not defined
+```
+
+**Solution:**
+
+Add import statement at the beginning of the script:
+```python
+import sys
+```
+
+Then modify all `exit()` commands to `sys.exit()`:
+```python
+# Before
+exit(main())
+exit(1)
+
+# After
+sys.exit(main())
+sys.exit(1)
+```
+
+---
+
+### Error 2: ModuleNotFoundError - No module named 'modules'
+
+**Error Message:**
+```
+Traceback (most recent call last):
+  File "D:\Users\vigneshwaraprabu.s\Downloads\moduler\moduler\eks_analyzer.py", line 6, in <module>
+    from modules.aws_session import AWSSession
+ModuleNotFoundError: No module named 'modules'
+```
+
+**Solution:**
+
+Add the following code at the beginning of the script (before any module imports):
+
+```python
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Now import modules
+from modules.aws_session import AWSSession
+from modules.csv_handler import CSVHandler
+# ... rest of imports
+```
+
+This ensures Python can find the `modules` directory regardless of where the script is run from.

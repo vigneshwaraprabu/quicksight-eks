@@ -737,7 +737,57 @@ aws sts get-caller-identity --profile presidio-sandbox
 
 aws sso login --profile your-sso-profile
 
+Glue Crawler Role:
 
+AWSGlueServiceRole-eks_test_crawler
+AWSGlueServiceRole
+AWSGlueServiceRole-eks_test_crawler-EZCRC-s3Policy
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::vignesh-s3-debezium-test/*"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceAccount": "853973692277"
+                }
+            }
+        }
+    ]
+}
+
+Trust Relationship:
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "glue.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole",
+            "Condition": {
+                "StringEquals": {
+                    "aws:SourceAccount": "853973692277"
+                }
+            }
+        }
+    ]
+}
+
+Execute the Glue Crawler once to create the schema(table) in database
+
+Athena query:
+SELECT * FROM "AwsDataCatalog"."eks_test_db"."reports" limit 10
+eks_test_db - db name
 
 
 

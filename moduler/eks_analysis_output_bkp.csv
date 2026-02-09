@@ -1,0 +1,5 @@
+AccountID,AccountName,Region,ClusterName,ClusterVersion,InstanceID,AMI_ID,AMI_Age,OS_Version,InstanceType,NodeState,NodeUptime,Latest_EKS_AMI,PatchPendingStatus,NodeReadinessStatus
+853973692277,pcsg-devops,us-east-1,poc-cluster1,1.34,i-06b8ed7b5459232e1,ami-0297916cef61076f8,7 days,Amazon Linux 2023,t3.medium,running,0 days 13 hours,ami-0297916cef61076f8,False,Ready
+853973692277,pcsg-devops,us-east-1,poc-cluster1,1.34,i-03eca8e9e1cdab9c1,ami-0297916cef61076f8,7 days,Amazon Linux 2023,t3.medium,running,0 days 13 hours,ami-0297916cef61076f8,False,Ready
+853973692277,pcsg-devops,us-east-1,test-ami,1.34,i-027acf38936ef93ce,ami-0297916cef61076f8,7 days,Amazon Linux 2023,t3.medium,running,0 days 9 hours,ami-0297916cef61076f8,False,Ready
+853973692277,pcsg-devops,us-east-1,test-ami,1.34,i-0c0f7a1c9b5565e50,ami-0297916cef61076f8,7 days,Amazon Linux 2023,t3.medium,running,0 days 9 hours,ami-0297916cef61076f8,False,Ready
