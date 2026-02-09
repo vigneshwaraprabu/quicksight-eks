@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple
 from datetime import datetime, timezone
 from botocore.exceptions import ClientError
+from .logger import Logger
 
 
 class NodeOperations:
@@ -43,7 +44,7 @@ class NodeOperations:
             
             return nodes, instance_ids
         except ClientError as e:
-            print(f"ERROR: Failed to get nodes for cluster {cluster_name}: {e}")
+            Logger.error(f"Failed to get nodes for cluster {cluster_name}: {e}")
             return [], []
     
     def _enrich_with_ami_data(self, nodes: List[Dict], ami_ids: List[str]):

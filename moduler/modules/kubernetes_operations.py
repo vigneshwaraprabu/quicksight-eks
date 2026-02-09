@@ -4,6 +4,7 @@ import subprocess
 from typing import List, Dict
 import kubernetes.client as k8s
 import kubernetes.config
+from .logger import Logger
 
 
 class KubernetesOperations:
@@ -32,13 +33,13 @@ class KubernetesOperations:
             return readiness_map
             
         except subprocess.TimeoutExpired:
-            print(f"WARNING: Timeout accessing cluster '{cluster_name}' ({self.KUBECONFIG_TIMEOUT}s limit)")
+            Logger.warning(f"Timeout accessing cluster '{cluster_name}' ({self.KUBECONFIG_TIMEOUT}s limit)", indent=1)
             return {iid: "Unknown" for iid in instance_ids}
         except k8s.ApiException as e:
             self._handle_k8s_error(e, cluster_name)
             return {iid: "Unknown" for iid in instance_ids}
         except Exception as e:
-            print(f"ERROR: Failed to fetch node readiness for '{cluster_name}': {str(e)}")
+            Logger.error(f"Failed to fetch node readiness for '{cluster_name}': {str(e)}", indent=1)
             return {iid: "Unknown" for iid in instance_ids}
         finally:
             self._restore_environment(original_env)
@@ -73,7 +74,7 @@ class KubernetesOperations:
             with tempfile.NamedTemporaryFile(delete=False, mode='w') as tmp:
                 kubeconfig_path = tmp.name
             
-            print(f"INFO: Generating kubeconfig for cluster '{cluster_name}'")
+            Logger.info(f"Generating kubeconfig for cluster '{cluster_name}'", indent=1)
             result = subprocess.run(
                 ["aws", "eks", "update-kubeconfig", "--name", cluster_name, 
                  "--region", self.region, "--kubeconfig", kubeconfig_path],
@@ -83,12 +84,12 @@ class KubernetesOperations:
             )
             
             if result.returncode != 0:
-                print(f"ERROR: Failed to generate kubeconfig: {result.stderr}")
+                Logger.error(f"Failed to generate kubeconfig: {result.stderr}", indent=1)
                 return None
             
             return kubeconfig_path
         except Exception as e:
-            print(f"ERROR: Kubeconfig generation failed: {e}")
+            Logger.error(f"Kubeconfig generation failed: {e}", indent=1)
             return None
     
     def _query_kubernetes_nodes(self, kubeconfig_path: str, instance_ids: List[str]) -> Dict[str, str]:
@@ -98,7 +99,7 @@ class KubernetesOperations:
         api_client.rest_client.pool_manager.connection_pool_kw['timeout'] = self.K8S_API_TIMEOUT
         v1 = k8s.CoreV1Api(api_client)
         
-        print("INFO: Querying Kubernetes API for node status")
+        Logger.info("Querying Kubernetes API for node status", indent=1)
         k8s_nodes = v1.list_node(_request_timeout=self.K8S_API_TIMEOUT)
         
         readiness_map = {}
@@ -119,11 +120,11 @@ class KubernetesOperations:
     @staticmethod
     def _handle_k8s_error(error: k8s.ApiException, cluster_name: str):
         error_map = {
-            401: f"ERROR: Unauthorized access to cluster '{cluster_name}'. Check EKS access entries",
-            403: f"ERROR: Forbidden access to cluster '{cluster_name}'. Check IAM permissions",
+            401: f"Unauthorized access to cluster '{cluster_name}'. Check EKS access entries",
+            403: f"Forbidden access to cluster '{cluster_name}'. Check IAM permissions",
         }
-        message = error_map.get(error.status, f"ERROR: Kubernetes API error for cluster '{cluster_name}': {error.reason}")
-        print(message)
+        message = error_map.get(error.status, f"Kubernetes API error for cluster '{cluster_name}': {error.reason}")
+        Logger.error(message, indent=1)
     
     @staticmethod
     def _cleanup_kubeconfig(kubeconfig_path: str):

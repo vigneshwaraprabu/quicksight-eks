@@ -1,5 +1,6 @@
 import boto3
 from typing import Dict, Optional
+from .logger import Logger
 
 
 class AWSSession:
@@ -39,5 +40,6 @@ class AWSSession:
     def print_identity(self, account_id: str):
         identity = self.get_caller_identity()
         account_name = self.get_account_name()
-        print(f"INFO: Account: {account_id} ({account_name}) | Region: {self.region} | "
-              f"UserId: {identity['UserId']} | Arn: {identity['Arn']}")
+        Logger.info(f"Account: {account_id} ({account_name}) | Region: {self.region}")
+        Logger.info(f"UserId: {identity['UserId']}", indent=1)
+        Logger.info(f"Arn: {identity['Arn']}", indent=1)

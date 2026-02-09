@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Dict
+from .logger import Logger
 
 
 class SSOAuthenticator:
@@ -20,7 +21,7 @@ class SSOAuthenticator:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = SSOAuthenticator.CONFIG_PATH.with_suffix(f".backup_{timestamp}")
             backup_path.write_text(SSOAuthenticator.CONFIG_PATH.read_text())
-            print(f"INFO: Backed up AWS config to {backup_path}")
+            Logger.info(f"Backed up AWS config to {backup_path}")
     
     @staticmethod
     def setup_profiles(accounts_data: Dict[str, str]):
@@ -48,14 +49,15 @@ class SSOAuthenticator:
             SSOAuthenticator.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             with SSOAuthenticator.CONFIG_PATH.open("a") as f:
                 f.write("\n" + "\n".join(config_lines))
-            print(f"INFO: Added {len(accounts_data)} SSO profile(s) to AWS config")
+            Logger.success(f"Added {len(accounts_data)} SSO profile(s) to AWS config")
         else:
-            print("INFO: All SSO profiles already exist in AWS config")
+            Logger.info("All SSO profiles already exist in AWS config")
     
     @staticmethod
     def authenticate(profile_name: str) -> bool:
-        print(f"\nINFO: Starting AWS SSO login for profile '{profile_name}'")
-        print("INFO: Browser will open for authentication")
+        Logger.blank()
+        Logger.info(f"Starting AWS SSO login for profile '{profile_name}'")
+        Logger.info("Browser will open for authentication", indent=1)
         
         try:
             result = subprocess.run(
@@ -66,32 +68,32 @@ class SSOAuthenticator:
             )
             
             if result.returncode == 0:
-                print("INFO: SSO login successful")
+                Logger.success("SSO login successful")
                 return True
             else:
-                print(f"ERROR: SSO login failed: {result.stderr}")
+                Logger.error(f"SSO login failed: {result.stderr}")
                 return False
                 
         except FileNotFoundError:
-            print("ERROR: AWS CLI not found. Install with: pip install awscli")
+            Logger.error("AWS CLI not found. Install with: pip install awscli")
             return False
         except subprocess.TimeoutExpired:
-            print(f"ERROR: Login timed out after {SSOAuthenticator.LOGIN_TIMEOUT}s")
+            Logger.error(f"Login timed out after {SSOAuthenticator.LOGIN_TIMEOUT}s")
             return False
         except Exception as e:
-            print(f"ERROR: SSO login error: {e}")
+            Logger.error(f"SSO login error: {e}")
             return False
     
     @staticmethod
     def cleanup_cache():
         if not SSOAuthenticator.CACHE_PATH.exists():
-            print("INFO: No SSO cache to clean up")
+            Logger.info("No SSO cache to clean up")
             return True
         
         try:
             shutil.rmtree(SSOAuthenticator.CACHE_PATH)
-            print(f"INFO: Cleaned up SSO cache at {SSOAuthenticator.CACHE_PATH}")
+            Logger.success(f"Cleaned up SSO cache at {SSOAuthenticator.CACHE_PATH}")
             return True
         except Exception as e:
-            print(f"WARNING: Failed to clean up SSO cache: {e}")
+            Logger.warning(f"Failed to clean up SSO cache: {e}")
             return False

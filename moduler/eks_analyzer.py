@@ -8,18 +8,7 @@ from modules.csv_handler import CSVHandler
 from modules.cluster_analyzer import ClusterAnalyzer
 from modules.sso_auth import SSOAuthenticator
 from modules.s3_handler import S3Handler
-
-
-def print_header():
-    print("\n" + "=" * 100)
-    print("EKS CLUSTER ANALYZER (SSO)")
-    print("=" * 100 + "\n")
-
-
-def print_section(title: str):
-    print("\n" + "=" * 100)
-    print(f"{title}")
-    print("=" * 100)
+from modules.logger import Logger
 
 
 def parse_arguments():
@@ -41,17 +30,17 @@ def main():
     csv_file = "accounts.csv"
     output_file = "eks_analysis_output.csv"
     
-    print_header()
+    Logger.header("EKS CLUSTER ANALYZER (SSO)")
     
-    print(f"INFO: Reading accounts from {csv_file}")
+    Logger.info(f"Reading accounts from {csv_file}")
     csv_handler = CSVHandler()
     accounts = csv_handler.read_accounts(csv_file)
     
     if not accounts:
-        print("ERROR: No accounts to process")
+        Logger.error("No accounts to process")
         return 1
     
-    print(f"INFO: Found {len(accounts)} account-region combination(s) to process")
+    Logger.success(f"Found {len(accounts)} account-region combination(s) to process")
     
     accounts_data = {}
     for account_info in accounts:
@@ -59,13 +48,13 @@ def main():
         role_name = account_info["role_name"]
         accounts_data[account_id] = role_name
     
-    print_section("SSO AUTHENTICATION SETUP")
-    print(f"INFO: Setting up SSO profiles for {len(accounts_data)} account(s)")
+    Logger.section("SSO AUTHENTICATION SETUP")
+    Logger.info(f"Setting up SSO profiles for {len(accounts_data)} account(s)")
     SSOAuthenticator.setup_profiles(accounts_data)
     
     first_account = list(accounts_data.keys())[0]
     if not SSOAuthenticator.authenticate(first_account):
-        print("ERROR: SSO authentication failed")
+        Logger.error("SSO authentication failed")
         return 1
     
     all_results = []
@@ -74,38 +63,39 @@ def main():
         account_id = account_info["account_id"]
         region = account_info["region"]
         
-        print_section(f"PROCESSING: Account {account_id} | Region {region}")
+        Logger.section(f"PROCESSING: Account {account_id} | Region {region}")
         
         try:
             aws_session = AWSSession(region, profile_name=account_id)
             aws_session.print_identity(account_id)
             
             account_name = aws_session.get_account_name()
-            print(f"INFO: Account Name: {account_name}")
+            Logger.info(f"Account Name: {account_name}")
             
             analyzer = ClusterAnalyzer(aws_session.session, region)
             results = analyzer.analyze_clusters(account_id, account_name)
             
             if results:
                 all_results.extend(results)
-                print(f"\nINFO: Completed analysis for {account_id} ({region})")
+                Logger.success(f"Completed analysis for {account_id} ({region})")
             else:
-                print(f"\nWARNING: No data collected for {account_id} ({region})")
+                Logger.warning(f"No data collected for {account_id} ({region})")
                 
         except Exception as e:
-            print(f"\nERROR: Failed to process {account_id} in {region}: {e}")
+            Logger.error(f"Failed to process {account_id} in {region}: {e}")
             continue
     
-    print_section("FINALIZING RESULTS")
+    Logger.section("FINALIZING RESULTS")
     csv_handler.write_cluster_data(output_file, all_results)
     
-    print(f"\nINFO: Analysis complete")
-    print(f"INFO: Processed {len(accounts)} account-region combination(s)")
-    print(f"INFO: Total records: {len(all_results)}")
-    print(f"INFO: Local output file: {output_file}")
+    Logger.blank()
+    Logger.success("Analysis complete")
+    Logger.info(f"Processed {len(accounts)} account-region combination(s)")
+    Logger.info(f"Total records: {len(all_results)}")
+    Logger.info(f"Local output file: {output_file}")
     
     if not args.skip_s3:
-        print_section("UPLOADING TO S3")
+        Logger.section("UPLOADING TO S3")
         first_account = list(accounts_data.keys())[0]
         first_region = accounts[0]["region"]
         s3_session = AWSSession(first_region, profile_name=first_account)
@@ -113,15 +103,16 @@ def main():
         
         upload_success = s3_handler.upload_file(output_file, args.s3_bucket, args.s3_prefix)
         if not upload_success:
-            print("WARNING: S3 upload failed, but local file is available")
+            Logger.warning("S3 upload failed, but local file is available")
     else:
-        print("\nINFO: Skipping S3 upload (--skip-s3 flag set)")
+        Logger.info("Skipping S3 upload (--skip-s3 flag set)")
     
-    print_section("CLEANUP")
-    print("INFO: Cleaning up SSO cache")
+    Logger.section("CLEANUP")
+    Logger.info("Cleaning up SSO cache")
     SSOAuthenticator.cleanup_cache()
     
-    print("\n" + "=" * 100 + "\n")
+    Logger.separator()
+    Logger.blank()
     return 0
 
 
@@ -129,9 +120,11 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\nWARNING: Interrupted by user")
+        Logger.blank()
+        Logger.warning("Interrupted by user")
         SSOAuthenticator.cleanup_cache()
         sys.exit(130)
     except Exception as e:
-        print(f"\nCRITICAL: Unexpected error: {e}")
+        Logger.blank()
+        Logger.critical(f"Unexpected error: {e}")
         sys.exit(1)

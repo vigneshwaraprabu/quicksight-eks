@@ -2,6 +2,7 @@ import boto3
 from datetime import datetime
 from pathlib import Path
 from botocore.exceptions import ClientError
+from .logger import Logger
 
 
 class S3Handler:
@@ -24,9 +25,10 @@ class S3Handler:
             s3_key = f"{prefix}/{timestamped_name}" if prefix else timestamped_name
             s3_key = s3_key.lstrip("/")
             
-            print(f"\nINFO: Uploading to S3")
-            print(f"INFO: Bucket: {bucket}")
-            print(f"INFO: Key: {s3_key}")
+            Logger.blank()
+            Logger.info(f"Uploading to S3")
+            Logger.info(f"Bucket: {bucket}", indent=1)
+            Logger.info(f"Key: {s3_key}", indent=1)
             
             self.s3_client.upload_file(
                 Filename=local_file,
@@ -35,21 +37,21 @@ class S3Handler:
             )
             
             s3_url = f"s3://{bucket}/{s3_key}"
-            print(f"INFO: Successfully uploaded to {s3_url}")
+            Logger.success(f"Successfully uploaded to {s3_url}")
             return True
             
         except FileNotFoundError:
-            print(f"ERROR: Local file '{local_file}' not found")
+            Logger.error(f"Local file '{local_file}' not found")
             return False
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             if error_code == 'NoSuchBucket':
-                print(f"ERROR: S3 bucket '{bucket}' does not exist")
+                Logger.error(f"S3 bucket '{bucket}' does not exist")
             elif error_code == 'AccessDenied':
-                print(f"ERROR: Access denied to bucket '{bucket}'. Check IAM permissions")
+                Logger.error(f"Access denied to bucket '{bucket}'. Check IAM permissions")
             else:
-                print(f"ERROR: Failed to upload to S3: {e}")
+                Logger.error(f"Failed to upload to S3: {e}")
             return False
         except Exception as e:
-            print(f"ERROR: S3 upload failed: {e}")
+            Logger.error(f"S3 upload failed: {e}")
             return False

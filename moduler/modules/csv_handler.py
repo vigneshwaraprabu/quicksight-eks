@@ -1,5 +1,6 @@
 import csv
 from typing import List, Dict, Any
+from .logger import Logger
 
 
 class CSVHandler:
@@ -21,7 +22,7 @@ class CSVHandler:
                     account_id = row["account_id"].strip()
                     
                     if "role_name" not in row or not row["role_name"].strip():
-                        print(f"ERROR: role_name is required for account {account_id}")
+                        Logger.error(f"role_name is required for account {account_id}")
                         continue
                     
                     role_name = row["role_name"].strip()
@@ -33,19 +34,19 @@ class CSVHandler:
                     } for region in regions)
             return accounts
         except FileNotFoundError:
-            print(f"ERROR: CSV file '{csv_file}' not found")
+            Logger.error(f"CSV file '{csv_file}' not found")
             return []
         except KeyError as e:
-            print(f"ERROR: Missing required column in CSV: {e}")
+            Logger.error(f"Missing required column in CSV: {e}")
             return []
         except Exception as e:
-            print(f"ERROR: Failed to read CSV file: {e}")
+            Logger.error(f"Failed to read CSV file: {e}")
             return []
     
     @staticmethod
     def write_cluster_data(output_file: str, data: List[Dict[str, Any]]):
         if not data:
-            print("WARNING: No data to write")
+            Logger.warning("No data to write")
             return
         
         try:
@@ -53,6 +54,6 @@ class CSVHandler:
                 writer = csv.DictWriter(f, fieldnames=CSVHandler.HEADERS)
                 writer.writeheader()
                 writer.writerows(data)
-            print(f"INFO: Results written to {output_file}")
+            Logger.success(f"Results written to {output_file}")
         except Exception as e:
-            print(f"ERROR: Failed to write CSV: {e}")
+            Logger.error(f"Failed to write CSV: {e}")

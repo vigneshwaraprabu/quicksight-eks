@@ -1,5 +1,6 @@
 from typing import List, Dict, Tuple
 from botocore.exceptions import ClientError
+from .logger import Logger
 
 
 class EKSOperations:
@@ -25,7 +26,7 @@ class EKSOperations:
                 clusters.extend(page.get("clusters", []))
             return clusters
         except ClientError as e:
-            print(f"ERROR: Failed to list EKS clusters in {self.region}: {e}")
+            Logger.error(f"Failed to list EKS clusters in {self.region}: {e}")
             return []
     
     def get_cluster_version(self, cluster_name: str) -> str:

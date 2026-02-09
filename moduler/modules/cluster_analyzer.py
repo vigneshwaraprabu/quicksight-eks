@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 from .eks_operations import EKSOperations
 from .node_operations import NodeOperations
 from .kubernetes_operations import KubernetesOperations
+from .logger import Logger
 
 
 class ClusterAnalyzer:
@@ -27,14 +28,14 @@ class ClusterAnalyzer:
         clusters = self.eks_ops.list_clusters()
         
         if not clusters:
-            print("INFO: No EKS clusters found")
+            Logger.info("No EKS clusters found")
             return []
         
-        print(f"INFO: Found {len(clusters)} cluster(s)")
+        Logger.success(f"Found {len(clusters)} cluster(s)")
         results = []
         
         for cluster_name in clusters:
-            print(f"\nINFO: Analyzing cluster: {cluster_name}")
+            Logger.subsection(f"Analyzing cluster: {cluster_name}")
             cluster_results = self._analyze_single_cluster(account_id, account_name, cluster_name)
             results.extend(cluster_results)
         
@@ -42,20 +43,20 @@ class ClusterAnalyzer:
     
     def _analyze_single_cluster(self, account_id: str, account_name: str, cluster_name: str) -> List[Dict[str, Any]]:
         cluster_version = self.eks_ops.get_cluster_version(cluster_name)
-        print(f"  INFO: Version: {cluster_version}")
+        Logger.info(f"Version: {cluster_version}", indent=1)
         
         latest_amis, error = self.eks_ops.get_latest_amis(cluster_version)
         if error:
-            print(f"  WARNING: Error fetching latest AMIs: {error}")
+            Logger.warning(f"Error fetching latest AMIs: {error}", indent=1)
         
-        print("  INFO: Fetching node details")
+        Logger.info("Fetching node details", indent=1)
         nodes, instance_ids = self.node_ops.get_cluster_nodes(cluster_name)
         
         if not nodes:
-            print("  INFO: No running nodes found")
+            Logger.info("No running nodes found", indent=1)
             return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version)]
         
-        print(f"  INFO: Found {len(nodes)} node(s)")
+        Logger.success(f"Found {len(nodes)} node(s)", indent=1)
         readiness_map = self.k8s_ops.get_node_readiness(instance_ids, cluster_name)
         
         results = []
@@ -63,8 +64,8 @@ class ClusterAnalyzer:
             node_data = self._process_node(account_id, account_name, cluster_name, cluster_version, 
                                           node, latest_amis, readiness_map)
             results.append(node_data)
-            print(f"  INFO: Instance {node['InstanceID']}: {node['InstanceType']} "
-                  f"({node.get('OS_Version', 'N/A')})")
+            Logger.info(f"Instance {node['InstanceID']}: {node['InstanceType']} "
+                  f"({node.get('OS_Version', 'N/A')})", indent=2)
         
         return results
     
