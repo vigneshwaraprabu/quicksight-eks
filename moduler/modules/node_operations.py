@@ -38,7 +38,7 @@ class NodeOperations:
                         instance_ids.append(instance_id)
                         nodes.append({
                             "InstanceID": instance_id,
-                            "AMI_ID": ami_id or "N/A",
+                            "Current_AMI_ID": ami_id or "N/A",
                             "InstanceType": instance.get("InstanceType", "N/A"),
                             "NodeState": instance.get("State", {}).get("Name", "N/A"),
                             "NodeUptime": self._calculate_uptime(instance.get("LaunchTime"))
@@ -60,12 +60,14 @@ class NodeOperations:
     def _enrich_with_ami_data(self, nodes: List[Dict], ami_ids: List[str]):
         ami_data = self._get_ami_info(ami_ids)
         for node in nodes:
-            if node["AMI_ID"] in ami_data:
-                ami_info = ami_data[node["AMI_ID"]]
+            if node["Current_AMI_ID"] in ami_data:
+                ami_info = ami_data[node["Current_AMI_ID"]]
                 node["AMI_Age"] = self._calculate_ami_age(ami_info.get("CreationDate"))
+                node["Current_AMI_Publication_Date"] = self._format_publication_date(ami_info.get("CreationDate"))
                 node["OS_Version"] = self._parse_os_version(ami_info.get("Description", ""))
             else:
                 node["AMI_Age"] = "N/A"
+                node["Current_AMI_Publication_Date"] = "N/A"
                 node["OS_Version"] = "N/A"
     
     def _get_ami_info(self, ami_ids: List[str]) -> Dict[str, Dict]:
@@ -98,6 +100,16 @@ class NodeOperations:
             creation_date = datetime.fromisoformat(creation_date_str.replace('Z', '+00:00'))
             delta = datetime.now(timezone.utc) - creation_date
             return f"{delta.days} days"
+        except Exception:
+            return "N/A"
+    
+    @staticmethod
+    def _format_publication_date(creation_date_str: str) -> str:
+        if not creation_date_str:
+            return "N/A"
+        try:
+            creation_date = datetime.fromisoformat(creation_date_str.replace('Z', '+00:00'))
+            return creation_date.strftime("%Y-%m-%d")
         except Exception:
             return "N/A"
     

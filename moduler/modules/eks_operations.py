@@ -17,6 +17,7 @@ class EKSOperations:
         self.region = region
         self.eks_client = session.client("eks", region_name=region)
         self.ssm_client = session.client("ssm", region_name=region)
+        self.ec2_client = session.client("ec2", region_name=region)
     
     def list_clusters(self) -> List[str]:
         try:
@@ -54,16 +55,65 @@ class EKSOperations:
         except Exception:
             return "N/A"
     
-    def get_latest_amis(self, version: str) -> Tuple[Dict[str, str], str]:
+    def get_latest_amis(self, version: str) -> Tuple[Dict[str, Dict[str, str]], str]:
         os_amis = {}
+        errors = []
         try:
+            Logger.info(f"Fetching latest AMIs for EKS version {version}", indent=1)
+            
+            ami_ids_to_describe = []
+            ami_to_os_map = {}
+            
             for os_path in self.OS_PATHS:
-                param_name = f"/aws/service/eks/optimized-ami/{version}/{os_path}/recommended/image_id"
+                ami_id_param = f"/aws/service/eks/optimized-ami/{version}/{os_path}/recommended/image_id"
                 try:
-                    response = self.ssm_client.get_parameter(Name=param_name)
-                    os_amis[os_path] = response["Parameter"]["Value"]
-                except ClientError:
-                    continue
+                    ami_response = self.ssm_client.get_parameter(Name=ami_id_param)
+                    ami_id = ami_response["Parameter"]["Value"]
+                    os_amis[os_path] = {
+                        "ami_id": ami_id,
+                        "publication_date": "N/A"
+                    }
+                    ami_ids_to_describe.append(ami_id)
+                    ami_to_os_map[ami_id] = os_path
+                    Logger.debug(f"Found AMI for {os_path}: {ami_id}", indent=2)
+                except ClientError as e:
+                    error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                    error_msg = f"{os_path}: {error_code}"
+                    errors.append(error_msg)
+                    Logger.debug(f"SSM parameter not found: {ami_id_param}", indent=2)
+            
+            if not os_amis:
+                error_summary = f"No AMI data found for version {version}. Errors: {', '.join(errors)}"
+                Logger.warning(error_summary, indent=1)
+                return {}, error_summary
+            
+            if ami_ids_to_describe:
+                try:
+                    Logger.debug(f"Describing {len(ami_ids_to_describe)} AMI(s) to get publication dates", indent=2)
+                    ami_details = self.ec2_client.describe_images(ImageIds=ami_ids_to_describe)
+                    for image in ami_details.get("Images", []):
+                        ami_id = image.get("ImageId")
+                        creation_date = image.get("CreationDate")
+                        if ami_id in ami_to_os_map:
+                            os_path = ami_to_os_map[ami_id]
+                            if creation_date:
+                                from datetime import datetime
+                                try:
+                                    creation_dt = datetime.fromisoformat(creation_date.replace('Z', '+00:00'))
+                                    formatted_date = creation_dt.strftime("%Y-%m-%d")
+                                    os_amis[os_path]["publication_date"] = formatted_date
+                                except Exception:
+                                    os_amis[os_path]["publication_date"] = "N/A"
+                except ClientError as e:
+                    Logger.warning(f"Failed to describe AMIs for publication dates: {e}", indent=2)
+            
+            Logger.success(f"Found AMI data for {len(os_amis)} OS type(s)", indent=1)
             return os_amis, ""
         except ClientError as e:
-            return {}, str(e)
+            error_msg = f"SSM client error: {str(e)}"
+            Logger.error(error_msg, indent=1)
+            return {}, error_msg
+        except Exception as e:
+            error_msg = f"Unexpected error fetching AMIs: {str(e)}"
+            Logger.error(error_msg, indent=1)
+            return {}, error_msg

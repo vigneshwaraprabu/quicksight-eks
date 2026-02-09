@@ -1,6 +1,6 @@
 # EKS Cluster Analyzer
 
-Automated multi-account EKS cluster analysis tool with AWS SSO authentication, intelligent caching, comprehensive error handling, and S3 upload support.
+Automated multi-account EKS cluster analysis tool with AWS SSO authentication, intelligent caching, and S3 upload support.
 
 ## Quick Start
 
@@ -18,11 +18,12 @@ python eks_analyzer.py --s3-bucket my-bucket --s3-prefix reports/eks
 ## Features
 
 - **AWS SSO Authentication** - Single sign-on for multi-account access
+- **AMI Tracking** - Tracks current and latest AMI IDs with publication dates
 - **Smart Caching** - 70% reduction in AWS API calls via STS caching
-- **Comprehensive Logging** - Color-coded, hierarchical output with visual symbols
-- **Error Handling** - Detailed validation and actionable error messages
-- **S3 Integration** - Automatic timestamped uploads to S3
-- **Performance Optimized** - Session reuse and single-pass processing (30-40% faster)
+- **Visual Logging** - Color-coded output with INFO/SUCCESS/WARNING/ERROR/CRITICAL levels
+- **Error Handling** - Comprehensive validation with actionable error messages
+- **S3 Integration** - Automatic timestamped uploads (format: eks_analysis_output_09Feb2026_03_45PM.csv)
+- **Performance Optimized** - Session reuse and single-pass CSV processing (30-40% faster)
 
 ## Project Structure
 
@@ -98,6 +99,51 @@ moduler/
 - Error handling and user feedback
 - Progress reporting with section headers
 
+## Input Format
+
+**accounts.csv** (required columns):
+```csv
+account_id,role_name,region
+853973692277,limited-admin,"us-east-1,us-west-2"
+```
+
+- `account_id`: 12-digit AWS account ID
+- `role_name`: IAM role name for SSO (from CSV, not hardcoded)
+- `region`: AWS regions (comma-separated for multiple)
+
+## Output Format
+
+**eks_analysis_output.csv** (17 columns):
+```
+AccountID, AccountName, Region, ClusterName, ClusterVersion, InstanceID,
+Current_AMI_ID, Current_AMI_Publication_Date, AMI_Age, OS_Version,
+InstanceType, NodeState, NodeUptime, Latest_AMI_ID, New_AMI_Publication_Date,
+PatchPendingStatus, NodeReadinessStatus
+```
+
+**Key Fields:**
+- `Current_AMI_ID`: AMI ID currently running on the node
+- `Current_AMI_Publication_Date`: Creation date of current AMI (YYYY-MM-DD)
+- `Latest_AMI_ID`: Latest EKS-optimized AMI from AWS SSM
+- `New_AMI_Publication_Date`: Creation date of latest AMI (YYYY-MM-DD)
+- `AMI_Age`: Days since current AMI was published
+- `PatchPendingStatus`: True if AMI age ≥ 30 days
+
+## Module Overview
+
+| Module | Purpose |
+|--------|---------|
+| `logger.py` | Color-coded logging with 6 levels (INFO/SUCCESS/WARNING/ERROR/CRITICAL/DEBUG) |
+| `sso_auth.py` | AWS SSO authentication, profile setup, cache management |
+| `aws_session.py` | Session management with STS/IAM/Organizations caching |
+| `csv_handler.py` | CSV I/O with validation (12-digit account IDs, required fields) |
+| `eks_operations.py` | EKS cluster operations, AMI data from SSM + EC2 describe_images |
+| `node_operations.py` | EC2 instance details, AMI age, OS parsing, uptime calculation |
+| `kubernetes_operations.py` | Kubeconfig generation, K8s API queries for node readiness |
+| `cluster_analyzer.py` | Workflow orchestration, data aggregation, OS-to-AMI mapping |
+| `s3_handler.py` | S3 uploads with timestamped filenames |
+| `eks_analyzer.py` | Main entry point, CLI arguments, error handling
+
 ## Key Improvements
 
 ### 🔐 SSO Authentication
@@ -107,38 +153,44 @@ moduler/
 - **Secure**: Uses temporary credentials with automatic refresh
 - **Role flexibility**: Role name fetched from CSV (not hardcoded)
 
-### 🎯 Modularity
-- **Separated concerns**: Each module has a single, well-defined responsibility
-- **Easy to test**: Individual modules can be tested independently
-- **Reusable**: Modules can be used in other scripts
-- **Maintainable**: Changes are localized to specific modules
+###Error Handling
 
-### ⚡ Optimizations
-- **Reduced code duplication**: Common patterns extracted into methods
-- **Better error handling**: Specific exceptions handled appropriately
-- **Resource cleanup**: Proper cleanup with try-finally blocks
-- **Efficient data flow**: No unnecessary data transformations
+The script handles various failure scenarios:
 
-### 🛡️ Removed Unnecessary Code
-- ❌ Removed `get_current_identity()` - incorporated into AWSSession
-- ❌ Removed redundant print statements
-- ❌ Removed hardcoded role_name - now fetched from CSV
-- ❌ Removed emoji symbols - replaced with INFO/ERROR/WARNING/CRITICAL
-- ❌ Removed all docstrings and comments for cleaner code
-- ❌ Cleaned up unused imports
-- ❌ Removed duplicate logic for uptime/age calculations
+- **CSV Validation**: Empty files, missing columns, invalid account IDs, empty required fields
+- **Authentication**: Expired tokens, access denied, missing profiles, SSO failures
+- **Cluster Access**: No clusters found, cluster not found, access denied errors
+- **Data Validation**: Invalid AMI data, missing node information, K8s API timeouts
+- **Network**: API timeouts (30s kubeconfig, 10s K8s API), connection failures
 
-### 🔧 Better Structure
-- **Type hints**: Added throughout for better IDE support
-- **Docstrings**: Clear documentation for all classes and methods
-- **Class-based design**: Better encapsulation and state management
-- **Consistent naming**: Clear, descriptive names throughout
+## Performance Optimizations
 
-### ⏱️ Timeout Handling
-- **Subprocess timeouts**: 30s for kubeconfig generation
-- **API timeouts**: 10s for Kubernetes API calls
-- **Connection timeouts**: Proper timeout configuration
+- **STS Caching**: Reduces API calls by 70% (3-4 per account → 1 per account)
+- **Session Reuse**: Single session for S3 upload eliminates redundant authentication
+- **Single-pass CSV**: Dictionary comprehension and enumerate() for efficient processing
+- **Account Name Caching**: IAM/Organizations lookups cached to prevent duplicate calls
 
+## Prerequisites
+
+```bash
+pip install boto3 kubernetes
+```
+
+- Python 3.7+
+- AWS CLI v2
+- boto3, kubernetes Python packages
+
+## IAM Permissions Required
+
+```
+eks:ListClusters, eks:DescribeCluster
+ec2:DescribeInstances, ec2:DescribeImages
+ssm:GetParameter
+iam:ListAccountAliases
+organizations:DescribeAccount
+s3:PutObject
+sts:GetCallerIdentity
+```
 ## Usage
 
 ### Prerequisites

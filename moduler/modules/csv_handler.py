@@ -7,8 +7,9 @@ class CSVHandler:
     
     HEADERS = [
         "AccountID", "AccountName", "Region", "ClusterName", "ClusterVersion",
-        "InstanceID", "AMI_ID", "AMI_Age", "OS_Version", "InstanceType",
-        "NodeState", "NodeUptime", "Latest_EKS_AMI", "PatchPendingStatus",
+        "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
+        "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
+        "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
         "NodeReadinessStatus"
     ]
     

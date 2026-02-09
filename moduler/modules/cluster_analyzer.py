@@ -74,7 +74,21 @@ class ClusterAnalyzer:
         try:
             os_version = node.get("OS_Version", "Unknown")
             os_key = self.OS_MAPPING.get(os_version)
-            latest_ami = latest_amis.get(os_key, "N/A") if os_key else "N/A"
+            
+            latest_ami_id = "N/A"
+            new_ami_publication_date = "N/A"
+            if os_key and os_key in latest_amis:
+                ami_info = latest_amis[os_key]
+                latest_ami_id = ami_info.get("ami_id", "N/A")
+                new_ami_publication_date = ami_info.get("publication_date", "N/A")
+            else:
+                if os_version == "Unknown":
+                    Logger.debug(f"OS version unknown for node {node.get('InstanceID', 'N/A')}", indent=2)
+                elif not os_key:
+                    Logger.debug(f"No OS mapping for '{os_version}'", indent=2)
+                elif os_key not in latest_amis:
+                    Logger.debug(f"No AMI data for OS path '{os_key}'", indent=2)
+            
             instance_id = node.get("InstanceID", "N/A")
             
             return {
@@ -84,13 +98,15 @@ class ClusterAnalyzer:
                 "ClusterName": cluster_name,
                 "ClusterVersion": cluster_version,
                 "InstanceID": instance_id,
-                "AMI_ID": node.get("AMI_ID", "N/A"),
+                "Current_AMI_ID": node.get("Current_AMI_ID", "N/A"),
+                "Current_AMI_Publication_Date": node.get("Current_AMI_Publication_Date", "N/A"),
                 "AMI_Age": node.get("AMI_Age", "N/A"),
                 "OS_Version": os_version,
                 "InstanceType": node.get("InstanceType", "N/A"),
                 "NodeState": node.get("NodeState", "N/A"),
                 "NodeUptime": node.get("NodeUptime", "N/A"),
-                "Latest_EKS_AMI": latest_ami,
+                "Latest_AMI_ID": latest_ami_id,
+                "New_AMI_Publication_Date": new_ami_publication_date,
                 "PatchPendingStatus": self.node_ops.get_patch_status(node.get("AMI_Age", "N/A")),
                 "NodeReadinessStatus": readiness_map.get(instance_id, "Unknown")
             }
@@ -108,8 +124,9 @@ class ClusterAnalyzer:
             "ClusterVersion": cluster_version
         }
         empty_fields = dict.fromkeys([
-            "InstanceID", "AMI_ID", "AMI_Age", "OS_Version", "InstanceType",
-            "NodeState", "NodeUptime", "Latest_EKS_AMI", "PatchPendingStatus",
+            "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
+            "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
+            "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
             "NodeReadinessStatus"
         ], "N/A")
         return {**base_data, **empty_fields}
