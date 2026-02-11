@@ -57,7 +57,7 @@ class ClusterAnalyzer:
         
         if not nodes:
             Logger.info("No running nodes found", indent=1)
-            return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version)]
+            return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version, latest_supported_version)]
         
         Logger.success(f"Found {len(nodes)} node(s)", indent=1)
         readiness_map = self.k8s_ops.get_node_readiness(instance_ids, cluster_name)
@@ -120,7 +120,7 @@ class ClusterAnalyzer:
             return self._create_empty_row(account_id, account_name, cluster_name, cluster_version)
     
     def _create_empty_row(self, account_id: str, account_name: str, cluster_name: str, 
-                         cluster_version: str) -> Dict[str, Any]:
+                         cluster_version: str, latest_supported_version: str) -> Dict[str, Any]:
         base_data = {
             "AccountID": account_id,
             "AccountName": account_name,
@@ -132,6 +132,10 @@ class ClusterAnalyzer:
             "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
             "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
             "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
-            "NodeReadinessStatus", "Cluster_Compliance"
+            "NodeReadinessStatus"
         ], "N/A")
+        
+        compliance = self.eks_ops.check_cluster_compliance(cluster_version, latest_supported_version)
+        empty_fields["Cluster_Compliance"] = compliance
+        
         return {**base_data, **empty_fields}
