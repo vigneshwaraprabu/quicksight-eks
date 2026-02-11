@@ -55,6 +55,37 @@ class EKSOperations:
         except Exception:
             return "N/A"
     
+    def get_latest_supported_version(self) -> str:
+        try:
+            for version in range(40, 20, -1):
+                version_str = f"1.{version}"
+                test_param = f"/aws/service/eks/optimized-ami/{version_str}/amazon-linux-2023/x86_64/standard/recommended/image_id"
+                try:
+                    self.ssm_client.get_parameter(Name=test_param)
+                    Logger.debug(f"Latest supported EKS version found: {version_str}", indent=2)
+                    return version_str
+                except ClientError:
+                    continue
+            return "1.31"
+        except Exception:
+            return "1.31"
+    
+    @staticmethod
+    def check_cluster_compliance(cluster_version: str, latest_version: str) -> str:
+        try:
+            if cluster_version == "N/A" or latest_version == "N/A":
+                return "0"
+            
+            cluster_minor = int(cluster_version.split(".")[1])
+            latest_minor = int(latest_version.split(".")[1])
+            
+            if cluster_minor >= (latest_minor - 2):
+                return "1"
+            else:
+                return "0"
+        except Exception:
+            return "0"
+    
     def get_latest_amis(self, version: str) -> Tuple[Dict[str, Dict[str, str]], str]:
         os_amis = {}
         errors = []

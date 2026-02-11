@@ -10,7 +10,7 @@ class CSVHandler:
         "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
         "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
         "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
-        "NodeReadinessStatus"
+        "NodeReadinessStatus", "Cluster_Compliance"
     ]
     
     @staticmethod

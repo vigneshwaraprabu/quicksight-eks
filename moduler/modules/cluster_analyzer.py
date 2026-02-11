@@ -45,6 +45,9 @@ class ClusterAnalyzer:
         cluster_version = self.eks_ops.get_cluster_version(cluster_name)
         Logger.info(f"Version: {cluster_version}", indent=1)
         
+        latest_supported_version = self.eks_ops.get_latest_supported_version()
+        Logger.info(f"Latest supported EKS version: {latest_supported_version}", indent=1)
+        
         latest_amis, error = self.eks_ops.get_latest_amis(cluster_version)
         if error:
             Logger.warning(f"Error fetching latest AMIs: {error}", indent=1)
@@ -62,7 +65,7 @@ class ClusterAnalyzer:
         results = []
         for node in nodes:
             node_data = self._process_node(account_id, account_name, cluster_name, cluster_version, 
-                                          node, latest_amis, readiness_map)
+                                          node, latest_amis, readiness_map, latest_supported_version)
             results.append(node_data)
             Logger.info(f"Instance {node['InstanceID']}: {node['InstanceType']} "
                   f"({node.get('OS_Version', 'N/A')})", indent=2)
@@ -70,7 +73,7 @@ class ClusterAnalyzer:
         return results
     
     def _process_node(self, account_id: str, account_name: str, cluster_name: str, cluster_version: str,
-                     node: Dict, latest_amis: Dict, readiness_map: Dict) -> Dict[str, Any]:
+                     node: Dict, latest_amis: Dict, readiness_map: Dict, latest_supported_version: str) -> Dict[str, Any]:
         try:
             os_version = node.get("OS_Version", "Unknown")
             os_key = self.OS_MAPPING.get(os_version)
@@ -90,6 +93,7 @@ class ClusterAnalyzer:
                     Logger.debug(f"No AMI data for OS path '{os_key}'", indent=2)
             
             instance_id = node.get("InstanceID", "N/A")
+            compliance = self.eks_ops.check_cluster_compliance(cluster_version, latest_supported_version)
             
             return {
                 "AccountID": account_id,
@@ -108,7 +112,8 @@ class ClusterAnalyzer:
                 "Latest_AMI_ID": latest_ami_id,
                 "New_AMI_Publication_Date": new_ami_publication_date,
                 "PatchPendingStatus": self.node_ops.get_patch_status(node.get("AMI_Age", "N/A")),
-                "NodeReadinessStatus": readiness_map.get(instance_id, "Unknown")
+                "NodeReadinessStatus": readiness_map.get(instance_id, "Unknown"),
+                "Cluster_Compliance": compliance
             }
         except Exception as e:
             Logger.warning(f"Error processing node data: {e}", indent=2)
@@ -127,6 +132,6 @@ class ClusterAnalyzer:
             "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
             "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
             "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
-            "NodeReadinessStatus"
+            "NodeReadinessStatus", "Cluster_Compliance"
         ], "N/A")
         return {**base_data, **empty_fields}

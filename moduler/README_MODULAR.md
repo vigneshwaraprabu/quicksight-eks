@@ -19,6 +19,7 @@ python eks_analyzer.py --s3-bucket my-bucket --s3-prefix reports/eks
 
 - **AWS SSO Authentication** - Single sign-on for multi-account access
 - **AMI Tracking** - Tracks current and latest AMI IDs with publication dates
+- **Compliance Checking** - EKS version compliance validation (n-2 support policy)
 - **Smart Caching** - 70% reduction in AWS API calls via STS caching
 - **Visual Logging** - Color-coded output with INFO/SUCCESS/WARNING/ERROR/CRITICAL levels
 - **Error Handling** - Comprehensive validation with actionable error messages
@@ -113,12 +114,12 @@ account_id,role_name,region
 
 ## Output Format
 
-**eks_analysis_output.csv** (17 columns):
+**eks_analysis_output.csv** (18 columns):
 ```
 AccountID, AccountName, Region, ClusterName, ClusterVersion, InstanceID,
 Current_AMI_ID, Current_AMI_Publication_Date, AMI_Age, OS_Version,
 InstanceType, NodeState, NodeUptime, Latest_AMI_ID, New_AMI_Publication_Date,
-PatchPendingStatus, NodeReadinessStatus
+PatchPendingStatus, NodeReadinessStatus, Cluster_Compliance
 ```
 
 **Key Fields:**
@@ -127,6 +128,9 @@ PatchPendingStatus, NodeReadinessStatus
 - `Latest_AMI_ID`: Latest EKS-optimized AMI from AWS SSM
 - `New_AMI_Publication_Date`: Creation date of latest AMI (YYYY-MM-DD)
 - `AMI_Age`: Days since current AMI was published
+- `PatchPendingStatus`: True if AMI age ≥ 30 days
+- `Cluster_Compliance`: 1 (compliant) if version ≥ latest-2, 0 (non-compliant) otherwise
+  - Example: If latest is 1.35, compliant versions are 1.35, 1.34, 1.33
 - `PatchPendingStatus`: True if AMI age ≥ 30 days
 
 ## Module Overview
