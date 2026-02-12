@@ -1,0 +1,6 @@
+# List regions to analyze, one per line
+# Lines starting with # are ignored
+
+us-east-1
+us-east-2
+us-west-2
