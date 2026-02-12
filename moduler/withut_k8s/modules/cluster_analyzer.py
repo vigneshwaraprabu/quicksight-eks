@@ -138,7 +138,7 @@ class ClusterAnalyzer:
             "ClusterVersion": cluster_version
         }
         empty_fields = dict.fromkeys([
-            "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age", 
+            "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age(in days)", 
             "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
             "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
             "NodeReadinessStatus"

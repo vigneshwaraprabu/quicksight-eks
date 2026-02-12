@@ -99,7 +99,7 @@ class NodeOperations:
         try:
             creation_date = datetime.fromisoformat(creation_date_str.replace('Z', '+00:00'))
             delta = datetime.now(timezone.utc) - creation_date
-            return f"{delta.days} days"
+            return str(delta.days)
         except Exception:
             return "N/A"
     
