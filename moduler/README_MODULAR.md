@@ -548,3 +548,24 @@ from modules.csv_handler import CSVHandler
 ```
 
 This ensures Python can find the `modules` directory regardless of where the script is run from.
+
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity",
+        "iam:ListAccountAliases",
+        "organizations:DescribeAccount",
+        "eks:ListClusters",
+        "eks:DescribeCluster",
+        "ec2:DescribeInstances",
+        "ec2:DescribeImages",
+        "ssm:GetParameter"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
