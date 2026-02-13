@@ -132,7 +132,7 @@ class NodeOperations:
         if ami_age_str and ami_age_str != "N/A":
             try:
                 days = int(ami_age_str.split()[0])
-                return "True" if days >= NodeOperations.PATCH_THRESHOLD_DAYS else "False"
+                return "1" if days >= NodeOperations.PATCH_THRESHOLD_DAYS else "0"
             except (ValueError, IndexError):
                 pass
-        return "False"
+        return "0"

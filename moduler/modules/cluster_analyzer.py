@@ -135,6 +135,11 @@ class ClusterAnalyzer:
             "NodeReadinessStatus"
         ], "N/A")
         
+        # Set AMI_Age to 0 for clusters with no nodes
+        empty_fields["AMI_Age(in days)"] = "0"
+        # Set PatchPendingStatus to 0 for clusters with no nodes
+        empty_fields["PatchPendingStatus"] = "0"
+        
         compliance = self.eks_ops.check_cluster_compliance(cluster_version, latest_supported_version)
         empty_fields["Cluster_Compliance"] = compliance
         
