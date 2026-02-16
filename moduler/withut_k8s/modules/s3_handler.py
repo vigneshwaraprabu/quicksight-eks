@@ -19,10 +19,14 @@ class S3Handler:
         suffix = path.suffix
         return f"{stem}_{timestamp}{suffix}"
     
-    def upload_file(self, local_file: str, bucket: str, prefix: str = "") -> bool:
+    def upload_file(self, local_file: str, bucket: str, prefix: str = "", preserve_filename: bool = False) -> bool:
         try:
-            timestamped_name = self.generate_timestamped_filename(Path(local_file).name)
-            s3_key = f"{prefix}/{timestamped_name}" if prefix else timestamped_name
+            if preserve_filename:
+                filename = Path(local_file).name
+            else:
+                filename = self.generate_timestamped_filename(Path(local_file).name)
+            
+            s3_key = f"{prefix}/{filename}" if prefix else filename
             s3_key = s3_key.lstrip("/")
             
             Logger.blank()
