@@ -1,5 +1,4 @@
 import csv
-import hashlib
 from datetime import datetime
 from typing import List, Dict, Any
 from .logger import Logger
@@ -12,7 +11,7 @@ class CSVHandler:
         "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age(in days)", 
         "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
         "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
-        "NodeReadinessStatus", "Cluster_Compliance", "DataExtractedAt", "RecordID"
+        "NodeReadinessStatus", "Cluster_Compliance", "Audit_Timestamp"
     ]
     
     @staticmethod
@@ -85,16 +84,11 @@ class CSVHandler:
             Logger.warning("No data to write")
             return
         
-        # Add timestamp and unique RecordID to each row
-        current_timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        # Add Audit_Timestamp to each row
+        current_date = datetime.utcnow().strftime("%Y-%m-%d")
         
         for row in data:
-            row["DataExtractedAt"] = current_timestamp
-            
-            # Create a unique RecordID based on stable identifiers (not time-based values)
-            # This helps QuickSight identify the same logical record across refreshes
-            unique_key = f"{row.get('AccountID', '')}_{row.get('Region', '')}_{row.get('ClusterName', '')}_{row.get('InstanceID', 'N/A')}"
-            row["RecordID"] = hashlib.md5(unique_key.encode()).hexdigest()
+            row["Audit_Timestamp"] = current_date
         
         try:
             with open(output_file, 'w', newline='') as f:

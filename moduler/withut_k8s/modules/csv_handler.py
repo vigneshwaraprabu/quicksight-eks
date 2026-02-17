@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 from typing import List, Dict, Any
 from .logger import Logger
 
@@ -10,7 +11,7 @@ class CSVHandler:
         "InstanceID", "Current_AMI_ID", "Current_AMI_Publication_Date", "AMI_Age(in days)", 
         "OS_Version", "InstanceType", "NodeState", "NodeUptime", 
         "Latest_AMI_ID", "New_AMI_Publication_Date", "PatchPendingStatus",
-        "NodeReadinessStatus", "Cluster_Compliance"
+        "NodeReadinessStatus", "Cluster_Compliance", "Audit_Timestamp"
     ]
     
     @staticmethod
@@ -82,6 +83,11 @@ class CSVHandler:
         if not data:
             Logger.warning("No data to write")
             return
+        
+        # Add current date as Audit_Timestamp to each row
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        for row in data:
+            row["Audit_Timestamp"] = current_date
         
         try:
             with open(output_file, 'w', newline='') as f:
