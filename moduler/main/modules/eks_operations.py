@@ -131,7 +131,7 @@ class EKSOperations:
                                 from datetime import datetime
                                 try:
                                     creation_dt = datetime.fromisoformat(creation_date.replace('Z', '+00:00'))
-                                    formatted_date = creation_dt.strftime("%Y-%m-%d")
+                                    formatted_date = creation_dt.strftime("%d/%m/%y")
                                     os_amis[os_path]["publication_date"] = formatted_date
                                 except Exception:
                                     os_amis[os_path]["publication_date"] = "N/A"

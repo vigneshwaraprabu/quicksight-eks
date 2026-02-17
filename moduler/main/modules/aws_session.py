@@ -5,6 +5,12 @@ from .logger import Logger
 
 class AWSSession:
     
+    # Static map of Account ID to Account Name
+    ACCOUNT_NAME_MAP = {
+        "853973692277": "Int-DevOps-Sandbox",
+        # Add more account mappings here as needed
+    }
+    
     def __init__(self, region: str, profile_name: Optional[str] = None):
         self.region = region
         self.profile_name = profile_name
@@ -38,27 +44,8 @@ class AWSSession:
         identity = self.get_caller_identity()
         account_id = identity["Account"]
         
-        try:
-            organizations = self.session.client("organizations", region_name=self.region)
-            response = organizations.describe_account(AccountId=account_id)
-            account_name = response["Account"].get("Name", account_id)
-            if account_name:
-                self._account_name_cache = account_name
-                return self._account_name_cache
-        except Exception:
-            pass
-        
-        try:
-            iam = self.session.client("iam", region_name=self.region)
-            response = iam.list_account_aliases()
-            aliases = response.get("AccountAliases", [])
-            if aliases:
-                self._account_name_cache = aliases[0]
-                return self._account_name_cache
-        except Exception:
-            pass
-        
-        self._account_name_cache = account_id
+        # Look up account name from static map, default to account ID if not found
+        self._account_name_cache = self.ACCOUNT_NAME_MAP.get(account_id, account_id)
         return self._account_name_cache
     
     def print_identity(self, account_id: str):

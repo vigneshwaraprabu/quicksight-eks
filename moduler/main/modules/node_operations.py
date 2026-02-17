@@ -109,7 +109,7 @@ class NodeOperations:
             return "N/A"
         try:
             creation_date = datetime.fromisoformat(creation_date_str.replace('Z', '+00:00'))
-            return creation_date.strftime("%Y-%m-%d")
+            return creation_date.strftime("%d/%m/%y")
         except Exception:
             return "N/A"
     

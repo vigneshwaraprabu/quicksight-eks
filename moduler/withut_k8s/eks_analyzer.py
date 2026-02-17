@@ -9,11 +9,24 @@ from modules.aws_session import AWSSession
 from modules.csv_handler import CSVHandler
 from modules.cluster_analyzer import ClusterAnalyzer
 from modules.sso_auth import SSOAuthenticator
+from modules.s3_handler import S3Handler
 from modules.logger import Logger
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='EKS Cluster Analyzer with SSO Authentication (No K8s Auth)')
+    parser.add_argument('--s3-bucket', 
+                       default='mmtag-reports',
+                       help='S3 bucket name for output upload (default: mmtag-reports)')
+    parser.add_argument('--s3-prefix', 
+                       default='eks-reports',
+                       help='S3 prefix/folder for output upload (default: eks-reports)')
+    parser.add_argument('--s3-account', 
+                       default='908676838269',
+                       help='AWS account ID where S3 bucket is located (default: 908676838269)')
+    parser.add_argument('--skip-s3', 
+                       action='store_true',
+                       help='Skip S3 upload and only save locally')
     return parser.parse_args()
 
 
@@ -42,6 +55,11 @@ def main():
     Logger.success(f"Found {len(accounts)} account-region combination(s) to process")
     
     accounts_data = {acc["account_id"]: acc["role_name"] for acc in accounts}
+    
+    # Add S3 account with PatchingAccess role to SSO profiles
+    if args.s3_account not in accounts_data:
+        accounts_data[args.s3_account] = "PatchingAccess"
+        Logger.info(f"Adding S3 account {args.s3_account} with PatchingAccess role to SSO profiles")
     
     Logger.section("SSO AUTHENTICATION SETUP")
     Logger.info(f"Setting up SSO profiles for {len(accounts_data)} account(s)")
@@ -97,7 +115,34 @@ def main():
     Logger.success("Analysis complete")
     Logger.info(f"Processed {len(accounts)} account-region combination(s)")
     Logger.info(f"Total records: {len(all_results)}")
-    Logger.info(f"Output file: {output_file}")
+    Logger.info(f"Local output file: {output_file}")
+    
+    # Upload to S3 if not skipped
+    if not args.skip_s3:
+        try:
+            Logger.section("UPLOADING TO S3")
+            Logger.info(f"Assuming role in account {args.s3_account}")
+            
+            # Create session for S3 account
+            s3_session = AWSSession("us-east-1", profile_name=args.s3_account)
+            s3_handler = S3Handler(s3_session.session)
+            
+            # Upload with original filename (not timestamped)
+            success = s3_handler.upload_file(
+                local_file=output_file,
+                bucket=args.s3_bucket,
+                prefix=args.s3_prefix,
+                preserve_filename=True
+            )
+            
+            if not success:
+                Logger.warning("S3 upload failed, but local file is available")
+                
+        except Exception as e:
+            Logger.error(f"S3 upload error: {e}")
+            Logger.warning("Local file saved successfully despite S3 upload failure")
+    else:
+        Logger.info("Skipping S3 upload (--skip-s3 flag set)")
     
     Logger.section("CLEANUP")
     Logger.info("Cleaning up SSO cache")

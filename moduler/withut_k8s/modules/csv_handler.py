@@ -85,7 +85,7 @@ class CSVHandler:
             return
         
         # Add current date as Audit_Timestamp to each row
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = datetime.now().strftime("%d/%m/%y")
         for row in data:
             row["Audit_Timestamp"] = current_date
         
