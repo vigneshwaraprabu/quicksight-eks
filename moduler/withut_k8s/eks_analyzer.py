@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+from datetime import datetime
 from typing import Dict
 from modules.aws_session import AWSSession
 from modules.csv_handler import CSVHandler
@@ -19,7 +20,8 @@ def parse_arguments():
 def main():
     args = parse_arguments()
     csv_file = "accounts.csv"
-    output_file = "eks_analysis_output.csv"
+    current_date = datetime.now().strftime("%Y_%m_%d")
+    output_file = f"eks_analysis_output_{current_date}.csv"
     
     Logger.header("EKS CLUSTER ANALYZER (SSO)")
     
