@@ -6,7 +6,7 @@ from .logger import Logger
 
 class NodeOperations:
     
-    PATCH_THRESHOLD_DAYS = 30
+    PATCH_THRESHOLD_DAYS = 70
     
     def __init__(self, session, region: str):
         self.session = session

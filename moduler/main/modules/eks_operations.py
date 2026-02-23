@@ -6,7 +6,7 @@ from .logger import Logger
 class EKSOperations:
     
     OS_PATHS = [
-        "amazon-linux-2/x86_64/standard",
+        "amazon-linux-2",
         "amazon-linux-2023/x86_64/standard",
         "bottlerocket/x86_64/standard",
         "ubuntu/x86_64/standard",
@@ -96,7 +96,12 @@ class EKSOperations:
             ami_to_os_map = {}
             
             for os_path in self.OS_PATHS:
-                ami_id_param = f"/aws/service/eks/optimized-ami/{version}/{os_path}/recommended/image_id"
+                # Bottlerocket uses a different SSM path structure
+                if os_path.startswith("bottlerocket"):
+                    ami_id_param = f"/aws/service/bottlerocket/aws-k8s-{version}/x86_64/latest/image_id"
+                else:
+                    ami_id_param = f"/aws/service/eks/optimized-ami/{version}/{os_path}/recommended/image_id"
+                
                 try:
                     ami_response = self.ssm_client.get_parameter(Name=ami_id_param)
                     ami_id = ami_response["Parameter"]["Value"]

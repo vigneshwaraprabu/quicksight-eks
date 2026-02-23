@@ -1,0 +1,3 @@
+AccountID,AccountName,Region,ClusterName,ClusterVersion,InstanceID,Current_AMI_ID,Current_AMI_Publication_Date,AMI_Age(in days),OS_Version,InstanceType,NodeState,NodeUptime,Latest_AMI_ID,New_AMI_Publication_Date,PatchPendingStatus,NodeReadinessStatus,Cluster_Compliance,Audit_Timestamp
+853973692277,Int-DevOps-Sandbox,us-east-1,arul-tetragon-poc,1.35,i-0cadc81cad70c2e69,ami-0c6b660379558b014,23/01/26,31,Bottlerocket,t3.medium,running,0 days 1 hours,ami-028e6346d27188c1a,12/02/26,0,Ready,1,23/02/26
+853973692277,Int-DevOps-Sandbox,us-east-1,arul-tetragon-poc,1.35,i-0129e365501208195,ami-0c6b660379558b014,23/01/26,31,Bottlerocket,t3.medium,running,0 days 1 hours,ami-028e6346d27188c1a,12/02/26,0,Ready,1,23/02/26
