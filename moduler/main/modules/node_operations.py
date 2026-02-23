@@ -118,7 +118,9 @@ class NodeOperations:
         desc_lower = description.lower()
         os_map = {
             "amazon linux 2023": "Amazon Linux 2023",
+            "amazonlinux2023": "Amazon Linux 2023",
             "amazon linux 2": "Amazon Linux 2",
+            "amazonlinux2": "Amazon Linux 2",
             "bottlerocket": "Bottlerocket",
             "ubuntu": "Ubuntu"
         }

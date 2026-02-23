@@ -8,7 +8,7 @@ from .logger import Logger
 class ClusterAnalyzer:
     
     OS_MAPPING = {
-        "Amazon Linux 2": "amazon-linux-2/x86_64/standard",
+        "Amazon Linux 2": "amazon-linux-2",
         "Amazon Linux 2023": "amazon-linux-2023/x86_64/standard",
         "Bottlerocket": "bottlerocket/x86_64/standard",
         "Ubuntu": "ubuntu/x86_64/standard"
