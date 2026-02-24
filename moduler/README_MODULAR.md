@@ -186,15 +186,135 @@ pip install boto3 kubernetes
 
 ## IAM Permissions Required
 
+### API Calls Breakdown
+
+**For each account/region in accounts.csv:**
+
+1. **STS Operations**:
+   - `sts:GetCallerIdentity` - Verify credentials and get account info
+
+2. **EKS Operations**:
+   - `eks:ListClusters` - List all EKS clusters in the region
+   - `eks:DescribeCluster` - Get cluster version and details
+
+3. **SSM Operations**:
+   - `ssm:GetParameter` - Fetch latest AMI IDs for different OS types (Amazon Linux 2, AL2023, Bottlerocket, Ubuntu)
+
+4. **EC2 Operations**:
+   - `ec2:DescribeInstances` - Get node instances for each cluster (filtered by cluster tags)
+   - `ec2:DescribeImages` - Get AMI metadata (creation date, OS type)
+
+5. **IAM/Organizations (Optional)**:
+   - `iam:ListAccountAliases` - Get friendly account name
+   - `organizations:DescribeAccount` - Get account name from AWS Organizations
+
+**For S3 upload account (908676838269 by default):**
+
+6. **S3 Operations**:
+   - `s3:PutObject` - Upload the CSV report to the specified bucket
+
+---
+
+### IAM Policy for Target Accounts
+
+Create a role (e.g., `PatchingAccess`) in each target account with this policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "STSAccess",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EKSReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "eks:ListClusters",
+        "eks:DescribeCluster"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2ReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SSMParameterReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*",
+        "arn:aws:ssm:*:*:parameter/aws/service/bottlerocket/*"
+      ]
+    },
+    {
+      "Sid": "AccountInfoAccess",
+      "Effect": "Allow",
+      "Action": [
+        "iam:ListAccountAliases",
+        "organizations:DescribeAccount"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
 ```
-eks:ListClusters, eks:DescribeCluster
-ec2:DescribeInstances, ec2:DescribeImages
-ssm:GetParameter
-iam:ListAccountAliases
-organizations:DescribeAccount
-s3:PutObject
-sts:GetCallerIdentity
+
+### IAM Policy for S3 Upload Account
+
+Add this additional statement to the role in the S3 account (908676838269):
+
+```json
+{
+  "Sid": "S3UploadAccess",
+  "Effect": "Allow",
+  "Action": [
+    "s3:PutObject"
+  ],
+  "Resource": "arn:aws:s3:::mmtag-reports/eks-reports/*"
+}
 ```
+
+**Complete policy for S3 account:**
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "STSAccess",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3UploadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::mmtag-reports/eks-reports/*"
+    }
+  ]
+}
+```
+
+**Note**: The script does NOT make Kubernetes API calls (it's the "withut_k8s" version), so no EKS cluster authentication or kubectl access is required.
 ## Usage
 
 ### Prerequisites
