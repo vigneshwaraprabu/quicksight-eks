@@ -1,2 +1,2 @@
 account_id,role_name,region
-853973692277,EC2RoleforMSK,"us-east-1,us-west-2"
+853973692277,PatchingAccess,"us-east-1,us-west-2"

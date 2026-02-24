@@ -113,38 +113,41 @@ class AWSSession:
         "780573890979": "mmfhir-sbx",
     }
     
-    def __init__(self, region: str, profile_name: Optional[str] = None):
+    def __init__(self, session, region: str):
+        """
+        Initialize AWSSession with an existing boto3 session.
+        
+        Args:
+            session: boto3.Session object (from role assumption)
+            region: AWS region
+        """
+        self.session = session
         self.region = region
-        self.profile_name = profile_name
         self._identity_cache = None
         self._account_name_cache = None
+        
         try:
-            if profile_name:
-                self.session = boto3.Session(profile_name=profile_name, region_name=region)
-            else:
-                self.session = boto3.Session(region_name=region)
+            self.sts_client = session.client("sts", region_name=region)
         except Exception as e:
-            Logger.error(f"Failed to create AWS session: {e}")
+            Logger.error(f"Failed to create STS client: {e}")
             raise
     
     def get_caller_identity(self) -> Dict[str, str]:
         if self._identity_cache:
             return self._identity_cache
         try:
-            sts = self.session.client("sts", region_name=self.region)
-            self._identity_cache = sts.get_caller_identity()
+            self._identity_cache = self.sts_client.get_caller_identity()
             return self._identity_cache
         except Exception as e:
             Logger.error(f"Failed to get caller identity: {e}")
-            Logger.error("This usually means authentication failed or credentials expired", indent=1)
-            raise
+            return {}
     
     def get_account_name(self) -> str:
         if self._account_name_cache:
             return self._account_name_cache
         
         identity = self.get_caller_identity()
-        account_id = identity["Account"]
+        account_id = identity.get("Account", "Unknown")
         
         # Look up account name from static map, default to account ID if not found
         self._account_name_cache = self.ACCOUNT_NAME_MAP.get(account_id, account_id)
@@ -153,10 +156,8 @@ class AWSSession:
     def print_identity(self, account_id: str):
         try:
             identity = self.get_caller_identity()
-            account_name = self.get_account_name()
-            Logger.info(f"Account: {account_id} ({account_name}) | Region: {self.region}")
-            Logger.info(f"UserId: {identity.get('UserId', 'N/A')}", indent=1)
-            Logger.info(f"Arn: {identity.get('Arn', 'N/A')}", indent=1)
+            Logger.info(f"Account: {account_id} | Region: {self.region} | "
+                       f"UserId: {identity.get('UserId', 'N/A')} | "
+                       f"Arn: {identity.get('Arn', 'N/A')}")
         except Exception as e:
-            Logger.error(f"Failed to retrieve identity: {e}")
-            raise
+            Logger.warning(f"Could not retrieve identity: {e}")
