@@ -49,7 +49,7 @@ jobs:
           aws sts get-caller-identity
           echo ""
           echo "⚠️  NOTE: The script will assume roles from accounts.csv for EKS access"
-          echo "⚠️  Make sure the role in accounts.csv (e.g., EC2RoleforMSK) has trust policy for GithubActionsRole!"
+          echo "⚠️  Make sure the role in accounts.csv (e.g., PatchingAccess) has trust policy for GithubActionsRole!"
 
       - name: Display accounts.csv roles
         run: |
