@@ -62,7 +62,7 @@ jobs:
           python3 eks_analyzer.py \
             --s3-bucket vignesh-s3-debezium-test \
             --s3-prefix eks-reports \
-            --account-list "../../../accounts.csv"
+            --account-list "../../accounts.csv"
 
       - name: Upload CSV as artifact
         uses: actions/upload-artifact@v4
