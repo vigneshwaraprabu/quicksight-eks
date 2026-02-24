@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cie-iac-tagging-scripts
+  description: "Repository for cie-iac-tagging-scripts"
+  annotations:
+    modmed.com/mmsystem: mminfra
+    modmed.com/containerized: "false"
+spec:
+  type: repository-factory
+  owner: cloud-infrastructure-engineering
+  lifecycle: production

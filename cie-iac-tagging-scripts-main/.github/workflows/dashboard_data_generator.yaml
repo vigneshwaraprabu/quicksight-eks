@@ -1,0 +1,38 @@
+name: Dashboard Data Generator
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *' # Example: Runs daily at 7 AM UTC
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    # Grant permissions for OIDC
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: "authenticate with aws role"
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: "us-east-1"
+          role-to-assume: "arn:aws:iam::182399726717:role/github/modmed/github-aws-tag-check"
+          role-session-name: ${{ github.run_id }}
+          role-duration-seconds: "900"
+          mask-aws-account-id: "true"
+
+      - name: Use the token to checkout another private repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies (optional)
+        run: pip install -r requirements.txt
+
+      - name: Run Python script
+        run: python tagging_script.py --csv account_regions.csv --s3-bucket mmtag-reports --s3-prefix reports/
