@@ -1,9 +1,11 @@
 import os
 import shutil
 import subprocess
+import boto3
 from pathlib import Path
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
+from botocore.exceptions import ClientError
 from .logger import Logger
 
 
@@ -53,14 +55,23 @@ class SSOAuthenticator:
             Logger.info("All SSO profiles already exist in AWS config")
     
     @staticmethod
-    def authenticate(profile_name: str) -> bool:
+    def authenticate(profile_name: str = None) -> bool:
         Logger.blank()
-        Logger.info(f"Starting AWS SSO login for profile '{profile_name}'")
+        
+        if profile_name:
+            Logger.info(f"Starting AWS SSO login for profile '{profile_name}'")
+        else:
+            Logger.info("Starting AWS SSO login")
+        
         Logger.info("Browser will open for authentication", indent=1)
         
         try:
+            cmd = ["aws", "sso", "login"]
+            if profile_name:
+                cmd.extend(["--profile", profile_name])
+            
             result = subprocess.run(
-                ["aws", "sso", "login", "--profile", profile_name],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=SSOAuthenticator.LOGIN_TIMEOUT
@@ -72,7 +83,11 @@ class SSOAuthenticator:
             else:
                 error_msg = result.stderr.strip()
                 if "Could not find profile" in error_msg:
-                    Logger.error(f"Profile '{profile_name}' not found in AWS config")
+                    if profile_name:
+                        Logger.error(f"Profile '{profile_name}' not found in AWS config")
+                    else:
+                        Logger.error("No default profile found in AWS config")
+                    Logger.error("Run: aws configure sso", indent=1)
                 elif "sso_start_url" in error_msg:
                     Logger.error("Invalid SSO configuration. Check sso_start_url and sso_region")
                 elif "access token" in error_msg.lower():
@@ -109,3 +124,89 @@ class SSOAuthenticator:
         except Exception as e:
             Logger.warning(f"Failed to clean up SSO cache: {e}")
             return False
+    
+    @staticmethod
+    def discover_accounts() -> List[str]:
+        """
+        Discover all AWS accounts accessible via the current SSO session.
+        Uses AWS CLI to list accounts from SSO (no Organizations API needed).
+        Returns a list of account IDs.
+        """
+        try:
+            Logger.info("Discovering accessible AWS accounts from SSO...")
+            
+            # Use AWS CLI to list accounts accessible via SSO
+            result = subprocess.run(
+                ["aws", "sso", "list-accounts"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                Logger.error("Failed to list SSO accounts")
+                Logger.error(f"Error: {result.stderr.strip()}", indent=1)
+                Logger.blank()
+                Logger.info("Falling back to parsing AWS config profiles...", indent=1)
+                return SSOAuthenticator._discover_from_config()
+            
+            # Parse JSON output
+            import json
+            accounts_data = json.loads(result.stdout)
+            
+            account_ids = []
+            for account in accounts_data:
+                account_id = account.get('accountId')
+                account_name = account.get('accountName', 'N/A')
+                if account_id:
+                    account_ids.append(account_id)
+                    Logger.info(f"  • {account_id} ({account_name})", indent=1)
+            
+            if account_ids:
+                Logger.success(f"Discovered {len(account_ids)} account(s) from SSO")
+                return account_ids
+            else:
+                Logger.warning("No accounts found via SSO")
+                return []
+                
+        except FileNotFoundError:
+            Logger.error("AWS CLI not found")
+            return []
+        except json.JSONDecodeError:
+            Logger.warning("Failed to parse SSO accounts, trying config fallback...")
+            return SSOAuthenticator._discover_from_config()
+        except Exception as e:
+            Logger.error(f"Unexpected error discovering accounts: {e}")
+            Logger.info("Trying config fallback...", indent=1)
+            return SSOAuthenticator._discover_from_config()
+    
+    @staticmethod
+    def _discover_from_config() -> List[str]:
+        """
+        Fallback: Parse account IDs from existing AWS config profiles.
+        """
+        account_ids = []
+        try:
+            if SSOAuthenticator.CONFIG_PATH.exists():
+                config_content = SSOAuthenticator.CONFIG_PATH.read_text()
+                lines = config_content.split('\n')
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('sso_account_id'):
+                        account_id = line.split('=')[1].strip()
+                        if account_id and account_id not in account_ids:
+                            account_ids.append(account_id)
+                            Logger.info(f"  • {account_id} (from config)", indent=1)
+                
+                if account_ids:
+                    Logger.success(f"Found {len(account_ids)} account(s) from AWS config")
+                    return account_ids
+                else:
+                    Logger.error("No SSO accounts found in AWS config")
+            else:
+                Logger.error("AWS config file not found")
+        except Exception as e:
+            Logger.error(f"Failed to parse config: {e}")
+        
+        return []

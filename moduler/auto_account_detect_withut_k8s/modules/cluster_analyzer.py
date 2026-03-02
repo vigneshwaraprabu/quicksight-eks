@@ -31,54 +31,71 @@ class ClusterAnalyzer:
             return []
         
         Logger.success(f"Found {len(clusters)} cluster(s)")
+        Logger.info(f"Clusters: {', '.join(clusters)}", indent=1)
         results = []
         
         for cluster_name in clusters:
             Logger.subsection(f"Analyzing cluster: {cluster_name}")
-            cluster_results = self._analyze_single_cluster(account_id, account_name, cluster_name)
-            results.extend(cluster_results)
+            try:
+                cluster_results = self._analyze_single_cluster(account_id, account_name, cluster_name)
+                results.extend(cluster_results)
+            except Exception as e:
+                Logger.error(f"Error analyzing cluster {cluster_name}: {str(e)[:100]}", indent=1)
+                # Still add cluster to results even if analysis fails
+                cluster_version = self.eks_ops.get_cluster_version(cluster_name)
+                latest_version = self.eks_ops.get_latest_supported_version()
+                results.append(self._create_empty_row(account_id, account_name, cluster_name, 
+                                                     cluster_version, latest_version))
         
         return results
     
     def _analyze_single_cluster(self, account_id: str, account_name: str, cluster_name: str) -> List[Dict[str, Any]]:
-        cluster_version = self.eks_ops.get_cluster_version(cluster_name)
-        Logger.info(f"Version: {cluster_version}", indent=1)
-        
-        latest_supported_version = self.eks_ops.get_latest_supported_version()
-        Logger.info(f"Latest supported EKS version: {latest_supported_version}", indent=1)
-        
-        latest_amis, error = self.eks_ops.get_latest_amis(cluster_version)
-        if error:
-            Logger.warning(f"Error fetching latest AMIs: {error}", indent=1)
-        
-        Logger.info("Fetching node details", indent=1)
-        nodes, instance_ids = self.node_ops.get_cluster_nodes(cluster_name)
-        
-        if not nodes:
-            Logger.info("No running nodes found", indent=1)
-            return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version, latest_supported_version)]
-        
-        Logger.success(f"Found {len(nodes)} node(s)", indent=1)
-        
-        # Skip Kubernetes readiness check (requires EKS cluster authentication)
-        readiness_map = {iid: "N/A" for iid in instance_ids}
-        
-        # Log OS distribution for this cluster
-        os_distribution = {}
-        for node in nodes:
-            os_ver = node.get("OS_Version", "Unknown")
-            os_distribution[os_ver] = os_distribution.get(os_ver, 0) + 1
-        Logger.info(f"OS distribution: {', '.join([f'{os}: {count}' for os, count in os_distribution.items()])}", indent=1)
-        
-        results = []
-        for node in nodes:
-            node_data = self._process_node(account_id, account_name, cluster_name, cluster_version, 
-                                          node, latest_amis, readiness_map, latest_supported_version)
-            results.append(node_data)
-            Logger.info(f"Instance {node['InstanceID']}: {node['InstanceType']} "
-                  f"({node.get('OS_Version', 'N/A')})", indent=2)
-        
-        return results
+        try:
+            cluster_version = self.eks_ops.get_cluster_version(cluster_name)
+            Logger.info(f"Version: {cluster_version}", indent=1)
+            
+            latest_supported_version = self.eks_ops.get_latest_supported_version()
+            Logger.info(f"Latest supported EKS version: {latest_supported_version}", indent=1)
+            
+            latest_amis, error = self.eks_ops.get_latest_amis(cluster_version)
+            if error:
+                Logger.warning(f"Error fetching latest AMIs: {error}", indent=1)
+            
+            Logger.info("Fetching node details", indent=1)
+            nodes, instance_ids = self.node_ops.get_cluster_nodes(cluster_name)
+            
+            if not nodes:
+                Logger.info("No running nodes found", indent=1)
+                return [self._create_empty_row(account_id, account_name, cluster_name, cluster_version, latest_supported_version)]
+            
+            Logger.success(f"Found {len(nodes)} node(s)", indent=1)
+            
+            # Skip Kubernetes readiness check (requires EKS cluster authentication)
+            readiness_map = {iid: "N/A" for iid in instance_ids}
+            
+            # Log OS distribution for this cluster
+            os_distribution = {}
+            for node in nodes:
+                os_ver = node.get("OS_Version", "Unknown")
+                os_distribution[os_ver] = os_distribution.get(os_ver, 0) + 1
+            Logger.info(f"OS distribution: {', '.join([f'{os}: {count}' for os, count in os_distribution.items()])}", indent=1)
+            
+            results = []
+            for node in nodes:
+                node_data = self._process_node(account_id, account_name, cluster_name, cluster_version, 
+                                              node, latest_amis, readiness_map, latest_supported_version)
+                results.append(node_data)
+                Logger.info(f"Instance {node['InstanceID']}: {node['InstanceType']} "
+                      f"({node.get('OS_Version', 'N/A')})", indent=2)
+            
+            return results
+        except Exception as e:
+            Logger.error(f"Error in cluster analysis: {str(e)[:150]}", indent=1)
+            # Return empty row for this cluster so it still appears in output
+            cluster_version = self.eks_ops.get_cluster_version(cluster_name)
+            latest_version = self.eks_ops.get_latest_supported_version()
+            return [self._create_empty_row(account_id, account_name, cluster_name, 
+                                          cluster_version, latest_version)]
     
     def _process_node(self, account_id: str, account_name: str, cluster_name: str, cluster_version: str,
                      node: Dict, latest_amis: Dict, readiness_map: Dict, latest_supported_version: str) -> Dict[str, Any]:
